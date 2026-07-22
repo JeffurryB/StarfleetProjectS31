@@ -62,5 +62,30 @@ function Advanced_HTTP_Request( $Host, $PostData = "" )
     return $Res[1];
 }
 
+/**
+ * Core Security Log System - Commits system overrides into the logging matrix
+ *
+ * @param mysqli $dbConnection  Active SQL resource link
+ * @param string $operator      Logged-in account username triggering the task
+ * @param string $actionType    Type of operation (UPDATE, INSERT, DELETE, PURGE)
+ * @param string $module        Target panel name (PERSONNEL, ASSETS, MESSAGES)
+ * @param string $identifier    Unique identity handle (Row ID, UUID, serial)
+ * @param string $telemetry     Text detailing exactly what changed
+ * @return bool                 True if transaction successfully logged
+ */
+function record_security_log($dbConnection, $operator, $actionType, $module, $identifier, $telemetry) {
+    $log_sql = "INSERT INTO `security_logs` 
+                (`operator_username`, `action_type`, `target_module`, `target_identifier`, `change_telemetry`) 
+                VALUES (?, ?, ?, ?, ?)";
+                
+    $stmt_log = $dbConnection->prepare($log_sql);
+    if ($stmt_log) {
+        $stmt_log->bind_param("sssss", $operator, $actionType, $module, $identifier, $telemetry);
+        $success = $stmt_log->execute();
+        $stmt_log->close();
+        return $success;
+    }
+    return false;
+}
 
 ?>
