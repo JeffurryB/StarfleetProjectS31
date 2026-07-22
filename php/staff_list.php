@@ -1,48 +1,153 @@
 <?php
-header( 'Content-type: text/html; charset=utf-8' );
-include( "config.php" );
-mysqli_set_charset( $db,"utf8" );
-$DivHeaders = "SELECT `did`, `dname` FROM `divisions` WHERE NOT did='10' ORDER BY `dname`";
+header('Content-type: text/html; charset=utf-8');
+include("config.php");
+mysqli_set_charset($db, "utf8");
+
+$DivHeadersQuery = "SELECT `did`, `dname` FROM `divisions` WHERE NOT did='10' ORDER BY `dname`";  //WHERE NOT did='10'
+$DivResult = mysqli_query($db, $DivHeadersQuery);
 ?>
-<html>
-<meta charset="utf-8"/>
-              <center>
-              <head>
-              <link rel="stylesheet" href="StarfleetDelta_Theme.css">
-                        </head>
-                        <body class="body">
-                                        <h1>Active Members By Division</h1>
-                                        <?php
-                                        $DivResult = mysqli_query( $db,$DivHeaders );
-if( !$DivResult )
-{
-    echo "<h2>ERROR: " . mysqli_error( $db ) . "</h2>";
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>LCARS Division Manifest</title>
+    <style>
+        :root {
+            --lcars-purple: #9966cc;
+            --lcars-orange: #ff9900;
+            --lcars-pink: #cc6699;
+            --lcars-blue: #33ccff;
+            --lcars-bg: #000000;
+            --lcars-green: #33cc33;
+        }
+        body {
+            background-color: var(--lcars-bg);
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .lcars-header { display: flex; align-items: flex-end; margin-bottom: 15px; }
+        .lcars-bar-top { background-color: var(--lcars-purple); height: 40px; flex-grow: 1; border-bottom-left-radius: 20px; margin-right: 15px; position: relative; }
+        .lcars-bar-top::before { content: "SYS-MANIFEST-209"; position: absolute; left: 25px; bottom: 3px; color: #000000; font-weight: bold; font-size: 14px; }
+        .lcars-title { color: var(--lcars-purple); font-size: 28px; font-weight: 300; margin: 0; white-space: nowrap; }
 
-while( $DivHeaders = mysqli_fetch_array( $DivResult ) )
-{
-    $MembersByDivision = "SELECT r.RankLogo, r.rname, IFNULL(a.DisplayName, a.username) AS `name`, t.tag_name, a.`UUID` FROM `accounts` a INNER JOIN `divisions` d ON a.`DivID` = d.`did` INNER JOIN `Rank` r ON a.`RankID` = r.`RankID` INNER JOIN `Titles` t ON a.`TitleID` = t.`tid` WHERE a.active = '1' AND NOT d.did='10' AND d.did = '" . $DivHeaders['did'] . "' ORDER BY r.`RankID`";
+        .lcars-container { display: flex; min-height: 80vh; }
+        .lcars-left-bracket { width: 150px; display: flex; flex-direction: column; margin-right: 20px; }
+        .lcars-elbow { background-color: var(--lcars-purple); height: 60px; border-top-left-radius: 20px; border-bottom-left-radius: 20px; margin-bottom: 15px; position: relative; }
+        .lcars-elbow::after { content: ""; position: absolute; background-color: var(--lcars-bg); width: 110px; height: 35px; bottom: 0; right: 0; border-top-left-radius: 15px; }
+        
+        .lcars-btn { background-color: var(--lcars-orange); color: #000000; padding: 10px; text-decoration: none; font-weight: bold; font-size: 13px; text-align: right; margin-bottom: 5px; border-radius: 5px 0 0 5px; }
+        .lcars-btn.btn-back { background-color: var(--lcars-blue); }
+        .lcars-main-panel { flex-grow: 1; display: flex; flex-direction: column; }
 
-    echo "<h3>" . $DivHeaders['dname'] . "</h3>";
-    echo "<table class='outline'><tr class='box'><th>Rank</th><th>Name</th><th>Title</th></tr>";//Set up each table on the page
+        .division-header {
+            color: var(--lcars-orange);
+            font-size: 18px;
+            font-weight: bold;
+            margin: 25px 0 10px 0;
+            border-bottom: 2px solid var(--lcars-orange);
+            padding-bottom: 5px;
+        }
 
-    $result = mysqli_query( $db,$MembersByDivision );
-    if( !$result )
-    {
-        echo "<tr><td>ERROR</tr><tr>" . mysqli_error( $db ) . "</tr></td>";
-    }
+        .lcars-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .lcars-table th {
+            background-color: var(--lcars-blue);
+            color: #000000;
+            text-align: left;
+            padding: 10px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .lcars-table td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #22222b;
+            font-size: 14px;
+            vertical-align: middle;
+        }
+        .lcars-table tr:hover { background-color: #111116; }
+        
+        .member-link {
+            color: #ffcc00;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .member-link:hover { text-decoration: underline; color: #ffffff; }
+        .rank-container { font-size: 12px; text-align: center; color: #aaa; }
+        .error-text { color: var(--lcars-pink); font-weight: bold; }
+    </style>
+</head>
+<body>
+    <header class="lcars-header">
+        <div class="lcars-bar-top"></div>
+        <h2 class="lcars-title">ACTIVE MEMBERS BY DIVISION</h2>
+    </header>
 
-    while( $row = mysqli_fetch_array( $result ) )
-    {
-        //Creates a loop to loop through results
-        echo "<tr><td align='center'>" . $row['rname'] . "<br>" . $row['RankLogo'] . "</td><td><a href='secondlife:///app/agent/" . $row['UUID'] . "/about' style='color:#FDD017'>" . $row['name'] . "</a></td><td align='left'>" . $row['tag_name'] . "</td></tr>";
-    }
-    echo "</table>";
-}
-mysqli_close( $db );
-?>
-</tr>
-</table>
+    <div class="lcars-container">
+        <nav class="lcars-left-bracket">
+            <div class="lcars-elbow"></div>
+            <a href="welcome.php" class="lcars-btn btn-back">MAIN TERM</a>
+            <a href="courses.php" class="lcars-btn">COURSES</a>
+            <a href="exams_web.php" class="lcars-btn" style="background-color: var(--lcars-pink);">TEST ARRAY</a>
+            <a href="transcript.php" class="lcars-btn">TRANSCRIPT</a>
+        </nav>
+
+        <main class="lcars-main-panel">
+            <h2>STARFLEET PERSONNEL ROSTER</h2>
+            <p style="text-transform: none; color: #aaa; margin-bottom: 10px;">
+                Active Complement Manifest // Real-Time Grid Synchronized
+            </p>
+
+            <?php
+            if (!$DivResult) {
+                echo "<h3 class='error-text'>ERROR EXECUTING COMMAND: " . htmlspecialchars(mysqli_error($db)) . "</h3>";
+            } else {
+                while ($divRow = mysqli_fetch_array($DivResult)) {
+                    $divId = $divRow['did'];
+                    echo "<div class='division-header'>" . htmlspecialchars($divRow['dname']) . "</div>";
+                    
+                    echo "<table class='lcars-table'>";
+                    echo "<thead><tr><th style='width: 150px; text-align: center;'>RANK</th><th>NAME</th><th>TITLE</th></tr></thead>";
+                    echo "<tbody>";
+
+                    $MembersByDivision = "SELECT a.username, r.RankLogo, r.rname, IFNULL(a.DisplayName, a.username) AS `name`, t.tag_name, a.`UUID` 
+                                          FROM `accounts` a 
+                                          INNER JOIN `divisions` d ON a.`DivID` = d.`did` 
+                                          INNER JOIN `Rank` r ON a.`RankID` = r.`RankID` 
+                                          INNER JOIN `Titles` t ON a.`TitleID` = t.`tid` 
+                                          WHERE a.active = '1' AND NOT d.did='10' AND d.did = '" . mysqli_real_escape_string($db, $divId) . "' 
+                                          ORDER BY r.`RankID`";  
+
+                                           //WHERE a.active = '1' AND NOT d.did='10' AND d.did = '"
+                    
+                    $result = mysqli_query($db, $MembersByDivision);
+                    if (!$result) {
+                        echo "<tr><td colspan='3' class='error-text'>GRID ERROR: " . htmlspecialchars(mysqli_error($db)) . "</td></tr>";
+                    } elseif (mysqli_num_rows($result) === 0) {
+                        echo "<tr><td colspan='3' style='color: #666;'>NO MEMBERS RECORDED IN THIS QUADRANT</td></tr>";
+                    } else {
+                        while ($row = mysqli_fetch_array($result)) {
+                            echo "<tr>";
+                            // Rank column combining textual name and graphics tags securely
+                            echo "<td class='rank-container'>" . htmlspecialchars($row['rname']) . "<br>" . $row['RankLogo'] . "</td>";
+                            // Native SL App link layer Integration
+                             echo "<td><a class='member-link' href='servicejacket.php?username=" . urlencode($row['username']) . "'>" . htmlspecialchars($row['name']) . "</a></td>";
+                            echo "<td style='color: var(--lcars-blue);'>" . htmlspecialchars($row['tag_name']) . "</td>";
+                            echo "</tr>";
+                        }
+                    }
+                    echo "</tbody></table>";
+                }
+            }
+            mysqli_close($db);
+            ?>
+        </main>
+    </div>
 </body>
-</center>
 </html>
