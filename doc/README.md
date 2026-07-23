@@ -1,41 +1,30 @@
 
 # README
 
-Each class/exam pair will need to be seperated into the sdq_classes and the sdq_exams directories accordingly. The installer programs will break if these directories are not kept seprate. Due to the limitations of LSL each line shall not exceed 255 charecters total. Any line that exceeds that limit will be chopped off.
+Each class/exam pair will need to be seperated into the sdq_classes and the sdq_exams directories accordingly.  This system used to bring content from the website to Second Life via script, however that's a laggy mess and not really needed.  This new system allows users to take classes via web interface and take the exam via web interface.
 
 ### Classes Formattting
 Title of File: class name, number, and author in the format ABC-123_FIRTNAME_LASNAME.txt
 
-First Line of file: ```<DESC:Description of Class>```
-
 All other text for the file on its own line.
 
-If you would like to add a sound or texture to the class to be used durring presentation it will need its own tag as follows.
-
-SOUND tag: ```<SOUND:UUID>```
-
-TEXTURE tag: ```<TEXTURE:UUID>```
-
-Other keywords and tags you may use are:
-
-```<LIGHTS_OFF>``` - This will dim all the lights attached to the classroom and display ```*RANK FIRSTNAME LASTNAME dims the lights*``` in Local chat.
-
-```<LIGHTS_ON>``` - This tag will cause the Exams system to start pulling information from the database and will turn all the lights back on. Once the "reader" script hits the end of the file it will pass out the exams to each desk and allow the user to interact with the desk displays.
 
 ### Exams Format
 
 ```
-1. Question
+QUESTION:
 A:Answer A
 B:Answer B
 C:Answer C
-D:Correct Answer D
-D
-2. Question #2
+D:Answer D
+ANSWER:D
+===
+QUESTION:
 A:Answer A
 B:Answer B
-C:Correct Answer C
+C:Answer C
 D:Answer D
-C
+ANSWER:C
+===
 ```
-Every question on the exam will need to be formatted using this template as the python scripts will crash with extra characters and out of place questions.
+Every question on the exam will need to be formatted using this template as the PHP Grading system will crash with extra characters and out of place questions.
