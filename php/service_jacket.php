@@ -1,21 +1,14 @@
 <?php
 include 'session.php'; 
+include 'config.php'; // 🗄️ Loads your global database configuration connection
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// Database Connection Configuration
-$host = 'YOUR INFO'; 
-$dbname = 'DB NAME';
-$username = 'DB USERNAME';
-$password = 'DB PW'; 
-
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (\PDOException $e) {
-    die("Connection failed: " . $e->getMessage());
+// Ensure the local file script maps cleanly to your config's database variable
+if (isset($db) && !isset($conn)) {
+    $conn = $db;
 }
 
 // Extract the authenticated username identifier using your exact 'login_user' session key
@@ -26,18 +19,22 @@ $update_success = "";
 // Handle incoming bio updates securely
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_bio') {
     $new_bio = isset($_POST['bio_text']) ? trim($_POST['bio_text']) : '';
-    try {
-        $updateSql = "UPDATE accounts SET bio = :bio WHERE username = :user";
-        $updateStmt = $pdo->prepare($updateSql);
-        $updateStmt->execute(['bio' => $new_bio, 'user' => $current_session_user]);
-        $update_success = "SUB-ROUTINE SUCCESSFUL: BIOGRAPHY METRICS UPDATED.";
-    } catch (\PDOException $e) {
+    
+    $updateSql = "UPDATE accounts SET bio = ? WHERE username = ?";
+    if ($updateStmt = $conn->prepare($updateSql)) {
+        $updateStmt->bind_param("ss", $new_bio, $current_session_user);
+        if ($updateStmt->execute()) {
+            $update_success = "SUB-ROUTINE SUCCESSFUL: BIOGRAPHY METRICS UPDATED.";
+        } else {
+            $update_success = "SYS_ERR: BIOGRAPHY SUB-ROUTINE CRITICAL FAILURE.";
+        }
+        $updateStmt->close();
+    } else {
         $update_success = "SYS_ERR: BIOGRAPHY SUB-ROUTINE CRITICAL FAILURE.";
     }
 }
 
 // HANDLE INCOMING PROFILE PHOTO UPLOADS SECURELY
-// ROUTE B: HANDLE INCOMING PROFILE PHOTO UPLOADS SECURELY
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'upload_photo') {
     if (isset($_FILES['profile_img']) && $_FILES['profile_img']['error'] === UPLOAD_ERR_OK) {
         $file_tmp = $_FILES['profile_img']['tmp_name'];
@@ -58,12 +55,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             $full_target_path = $target_dir . $new_filename;
             
             if (move_uploaded_file($file_tmp, $full_target_path)) {
-                try {
-                    $photoSql = "UPDATE accounts SET profile_img = :img WHERE username = :user";
-                    $photoStmt = $pdo->prepare($photoSql);
-                    $photoStmt->execute(['img' => $full_target_path, 'user' => $current_session_user]);
-                    $update_success = "DATA STREAM OVERLAY COMPLETE: NEW AVATAR RENDERED SUCCESSFULLY.";
-                } catch (\PDOException $e) {
+                $photoSql = "UPDATE accounts SET profile_img = ? WHERE username = ?";
+                if ($photoStmt = $conn->prepare($photoSql)) {
+                    $photoStmt->bind_param("ss", $full_target_path, $current_session_user);
+                    if ($photoStmt->execute()) {
+                        $update_success = "DATA STREAM OVERLAY COMPLETE: NEW AVATAR RENDERED SUCCESSFULLY.";
+                    } else {
+                        $update_success = "SYS_ERR: DATABASE CORRUPTION OR MATRIX WRITE EXCEPTION.";
+                    }
+                    $photoStmt->close();
+                } else {
                     $update_success = "SYS_ERR: DATABASE CORRUPTION OR MATRIX WRITE EXCEPTION.";
                 }
             } else {
@@ -79,64 +80,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 // ROUTE C: SIMPLIFIED DEFAULT PICTURE RESTORATION ROUTE
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'reset_photo') {
-    try {
-        // Simply overwrite database cell with your explicit default graphic asset path string
-        $resetSql = "UPDATE accounts SET profile_img = 'ProfilePics/Default_Profile_Pic.png' WHERE username = :user";
-        $resetStmt = $pdo->prepare($resetSql);
-        $resetStmt->execute(['user' => $current_session_user]);
-        $update_success = "MATRIX RESET: PROFILE IMAGE RESTORED TO DEFAULT SPECIFICATION.";
-    } catch (\PDOException $e) {
+    $resetSql = "UPDATE accounts SET profile_img = 'ProfilePics/Default_Profile_Pic.png' WHERE username = ?";
+    if ($resetStmt = $conn->prepare($resetSql)) {
+        $resetStmt->bind_param("s", $current_session_user);
+        if ($resetStmt->execute()) {
+            $update_success = "MATRIX RESET: PROFILE IMAGE RESTORED TO DEFAULT SPECIFICATION.";
+        } else {
+            $update_success = "SYS_ERR: PROFILE IMAGE RESET EXCEPTION LOGGED.";
+        }
+        $resetStmt->close();
+    } else {
         $update_success = "SYS_ERR: PROFILE IMAGE RESET EXCEPTION LOGGED.";
     }
 }
 
-try {
-    $accountSql = "SELECT a.ID, a.username, a.induction_date, a.species, a.promotions_count, a.profile_img, a.bio, a.gender, d.dname, r.rname 
-                   FROM accounts a 
-                   LEFT JOIN divisions d ON a.DivID = d.did 
-                   LEFT JOIN Rank r ON a.RankID = r.RankID 
-                   WHERE a.username = :user";
-    
-    $accountStmt = $pdo->prepare($accountSql);
-    $accountStmt->execute(['user' => $current_session_user]);
-    $user = $accountStmt->fetch(PDO::FETCH_ASSOC);
+// FETCH ACCOUNT METRICS FOR PROFILE PAGE CONTENT
+$user = null;
+$exams = [];
 
-    // Initialize an empty exams tracking array
-    $exams = [];
+$accountSql = "SELECT a.ID, a.username, a.induction_date, a.species, a.promotions_count, a.profile_img, a.bio, a.gender, d.dname, r.rname 
+               FROM accounts a 
+               LEFT JOIN divisions d ON a.DivID = d.did 
+               LEFT JOIN Rank r ON a.RankID = r.RankID 
+               WHERE a.username = ?";
 
-    // Fetch dynamic exam lists from the gradebook matching by username string
-    if ($user) {
-        $gradebookSql = "SELECT courses, date_completed 
-                         FROM gradebook 
-                         WHERE username = :username 
-                         ORDER BY date_completed DESC";
-        
-        $gradebookStmt = $pdo->prepare($gradebookSql);
-        $gradebookStmt->execute(['username' => $user['username']]);
-        $exams = $gradebookStmt->fetchAll(PDO::FETCH_ASSOC);
-    } else {
-        $user = [
-            'username' => 'Cadet_Kirk',
-            'rname' => 'Cadet First Class',
-            'dname' => 'Command & Operations',
-            'induction_date' => '2265-03-14',
-            'species' => 'Human',
-            'gender' => 'Male',
-            'promotions_count' => 0,
-            'profile_img' => '',
-            'bio' => 'PENDING STARFLEET SECURITY PROTOCOL CLEARANCE INTERFACE ASSIGNMENT...'
-        ];
-        $exams = [
-            ['courses' => 'Starship Helm Operations', 'date_completed' => '2265-01-12']
-        ];
+if ($accountStmt = $conn->prepare($accountSql)) {
+    $accountStmt->bind_param("s", $current_session_user);
+    $accountStmt->execute();
+    $res = $accountStmt->get_result();
+    if ($res && $res->num_rows > 0) {
+        $user = $res->fetch_assoc();
     }
-} catch (\PDOException $e) {
-    die("Data extraction error: " . $e->getMessage());
+    $accountStmt->close();
+} else {
+    die("Data extraction error: Account selection statement failure.");
 }
 
-$nav_user = mysqli_real_escape_string($db, $login_session);
+// Fetch dynamic exam lists from the gradebook matching by username string
+if ($user) {
+    $gradebookSql = "SELECT courses, date_completed 
+                     FROM gradebook 
+                     WHERE username = ? 
+                     ORDER BY date_completed DESC";
+    
+    if ($gradebookStmt = $conn->prepare($gradebookSql)) {
+        $gradebookStmt->bind_param("s", $user['username']);
+        $gradebookStmt->execute();
+        $res_grade = $gradebookStmt->get_result();
+        if ($res_grade) {
+            while ($row = $res_grade->fetch_assoc()) {
+                $exams[] = $row;
+            }
+        }
+        $gradebookStmt->close();
+    }
+} else {
+    // Structural Fallback Array if account registration profile row doesn't resolve
+    $user = [
+        'username' => 'Cadet_Kirk',
+        'rname' => 'Cadet First Class',
+        'dname' => 'Command & Operations',
+        'induction_date' => '2265-03-14',
+        'species' => 'Human',
+        'gender' => 'Male',
+        'promotions_count' => 0,
+        'profile_img' => '',
+        'bio' => 'PENDING STARFLEET SECURITY PROTOCOL CLEARANCE INTERFACE ASSIGNMENT...'
+    ];
+    $exams = [
+        ['courses' => 'Starship Helm Operations', 'date_completed' => '2265-01-12']
+    ];
+}
+
+// SECURE ADMINISTRATIVE NAVIGATION OVERLAY DETECTOR
+$nav_user = mysqli_real_escape_string($conn, $login_session);
 $sql_nav = "SELECT dh FROM accounts WHERE username = '$nav_user' LIMIT 1";
-$res_nav = mysqli_query($db, $sql_nav);
+$res_nav = mysqli_query($conn, $sql_nav);
 $is_admin = false;
 
 if ($res_nav && mysqli_num_rows($res_nav) == 1) {
@@ -147,7 +166,7 @@ if ($res_nav && mysqli_num_rows($res_nav) == 1) {
 }
 
 // Set up the default placeholder image path logic
-$profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfilePics/Default_Profile_Pic.png';
+$profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfilePics/logo.png';
 ?>
 
 <!DOCTYPE html>
