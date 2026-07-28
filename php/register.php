@@ -1,29 +1,24 @@
 <?php
+include("config.php"); // 🗄️ Loads your global database configuration connection
+
+// Ensure the local file script maps cleanly to your config's database variable
+if (isset($db) && !isset($conn)) {
+    $conn = $db;
+}
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// 1. Database Connection
-$host = 'YOUR INFO'; 
-$dbname = 'DB NAME';
-$username = 'DB USERNAME';
-$password = 'DB PW'; 
+// Fetch columns from your divisions table using MySQLi
+$divisions = [];
+$sql_div = "SELECT did, dname FROM divisions ORDER BY dname ASC";
+$result_div = $conn->query($sql_div);
 
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (\PDOException $e) {
-    die("Connection failed: " . $e->getMessage());
+if ($result_div && $result_div->num_rows > 0) {
+    while ($row = $result_div->fetch_assoc()) {
+        $divisions[] = $row;
+    }
 }
-
-// Fetch columns from your divisions table
-try {
-    $divStmt = $pdo->query("SELECT did, dname FROM divisions ORDER BY dname ASC");
-    $divisions = $divStmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (\PDOException $e) {
-    $divisions = []; 
-}
-
 $message = ""; 
 
 // 2. Handle Form Submission
@@ -49,47 +44,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       //  );
 
         // 4. Generate the 128-character SHA-512 Hash
-        $pepper = "$*%WKFHDSOUFSEFIJSD$^W$"; // MUST MATCH THE OTHER PEPPER VALUE EXACTLY THE SAME
+        $pepper = "K@7_mX9!pL2#vQ8!wZ1*rT5&"; 
         $hashInput = $rawPassword . $uuid . $pepper;
         $sha512Hash = hash('sha512', $hashInput); 
 
-        // 5. INSERT into accounts table (FIXED: Using 'DivID' column name instead of division_id)
-        try {
-            $sql = "INSERT INTO accounts (username, gender, email, password, UUID, DisplayName, DivID) 
-                    VALUES (:username, :gender, :email, :password, :uuid, :display, :division)";
+       // 5. INSERT into accounts table (FIXED: Using MySQLi Prepared Statement and 'DivID' column)
+        $sql = "INSERT INTO accounts (username, gender, email, password, UUID, DisplayName, DivID) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)";
+        
+        if ($stmt = $conn->prepare($sql)) {
+            // "ssssssi" means 6 strings and 1 integer (DivID)
+            $stmt->bind_param("ssssssi", $user, $gender, $email, $sha512Hash, $uuid, $user, $divisionId);
             
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([
-                'username' => $user,
-                'gender' => $gender,
-                'email'    => $email,
-                'password' => $sha512Hash,
-                'uuid'     => $uuid,
-                'display'  => $user,
-                'division' => $divisionId 
-            ]);
-            
-            header("Location: welcome.php");
-            exit();
-            
-            $message = "<p class='lcars-text-success'>ACCOUNT CREATED: " . htmlspecialchars($user) . " successfully registered.</p>";
-        } catch (\PDOException $e) {
-            if ($e->getCode() == 23000) {
-                $message = "<p class='lcars-text-error'>SYS_ERR: Username or Email already exists.</p>";
+            if ($stmt->execute()) {
+                $stmt->close();
+                // If you want a message, do not redirect. If you want a redirect, leave this as is:
+                header("Location: welcome.php");
+                exit();
             } else {
-                $message = "<p class='lcars-text-error'>SYS_ERR: " . htmlspecialchars($e->getMessage()) . "</p>";
+                // Check for MySQL duplicate entry error code (1062)
+                if ($conn->errno == 1062) {
+                    $message = "<p class='lcars-text-error'>SYS_ERR: Username or Email already exists.</p>";
+                } else {
+                    $message = "<p class='lcars-text-error'>SYS_ERR: " . htmlspecialchars($conn->error) . "</p>";
+                }
             }
+            $stmt->close();
+        } else {
+            $message = "<p class='lcars-text-error'>SYS_ERR: Statement preparation failed.</p>";
         }
     } else {
         $message = "<p class='lcars-text-error'>SYS_ERR: All parameters required.</p>";
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LCARS - Personnel Registration</title>
+    <title>[<?php echo GROUP_ABBR; ?>] - Personnel Registration</title>
     <style>
         @import url('https://googleapis.com');
         
