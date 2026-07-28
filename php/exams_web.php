@@ -12,6 +12,7 @@ $user_check = mysqli_real_escape_string($db, $login_session);
 $exam_submitted = false;
 $access_blocked = false;
 $block_reason = "";
+$result_message = "";
 
 // AUTOMATED PATH SCANNER: Pull available course text files
 $course_directory = "doc/sdq_exams/";
@@ -58,25 +59,23 @@ if (!empty($selected_course) && file_exists($target_file_path)) {
 }
 
 // 3. RETAKE & SECURITY VERIFICATION POLICY
+$total_attempts = 0; // Default to 0 for a brand new user
 if (!empty($selected_course)) {
-    $check_grade_query = mysqli_query($db, "SELECT Grade FROM gradebook WHERE username = '$user_check' AND courses = '$selected_course' LIMIT 1");
+    // 📊 Read the exact Grade and Attempts directly from your new gradebook structure
+    $check_grade_query = mysqli_query($db, "SELECT Grade, attempts FROM gradebook WHERE username = '$user_check' AND courses = '$selected_course' LIMIT 1");
     
     if (mysqli_num_rows($check_grade_query) > 0) {
         $grade_row = mysqli_fetch_assoc($check_grade_query);
         $current_grade = $grade_row['Grade'];
+        $total_attempts = intval($grade_row['attempts']);
 
         if ($current_grade >= 80.00) {
             $access_blocked = true;
             $block_reason = "CRITICAL LOCKOUT: EFFICIENCY RATING SATISFACTORY (" . $current_grade . "%). RETAKE PARAMETERS DENIED.";
-        } else {
-            // 🔒 SECURITY UPDATE: Adjusted from COUNT(*) to check our new single-row layout layout rules
-            $check_attempts_query = mysqli_query($db, "SELECT COUNT(*) as total_answers FROM scores WHERE username = '$user_check' AND course_id = '$selected_course'");
-            $attempt_row = mysqli_fetch_assoc($check_attempts_query);
-            
-            if ($attempt_row['total_answers'] > 0) {
-                $access_blocked = true;
-                $block_reason = "CRITICAL LOCKOUT: MAXIMUM ALLOWED ACADEMY REMEDIATION ATTEMPTS EXHAUSTED FOR THIS SECTOR.";
-            }
+        } elseif ($total_attempts >= 2) {
+            // Block user instantly if they have already finished 2 or more attempts
+            $access_blocked = true;
+            $block_reason = "CRITICAL LOCKOUT: MAXIMUM ALLOWED ACADEMY REMEDIATION ATTEMPTS EXHAUSTED FOR THIS SECTOR. ACADEMY INSTRUCTOR INTERVENTION REQUIRED.";
         }
     }
 }
@@ -87,33 +86,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_exam']) && !$ac
     $total_questions = count($parsed_questions);
     $correct_count = 0;
 
-    // Arrays to collect data columns in memory
     $compiled_q_nums = [];
     $compiled_u_ans  = [];
 
-    // 📡 THE CORE UPGRADE: Loop directly over the posted answers array from the browser!
     if (!empty($submitted_answers) && is_array($submitted_answers)) {
         
         foreach ($submitted_answers as $q_num => $user_ans) {
             $q_num = intval($q_num);
             $user_ans = trim($user_ans);
-            if (empty($user_ans)) { $user_ans = "X"; } // Handle skips safely
+            if (empty($user_ans)) { $user_ans = "X"; } 
 
-            // Compile everything into memory arrays
             $compiled_q_nums[] = $q_num;
             $compiled_u_ans[]  = strtoupper($user_ans);
 
-            // Grade the item against the loaded text file definitions
             if (isset($parsed_questions[$q_num]) && strtoupper($user_ans) === strtoupper($parsed_questions[$q_num]['answer'])) {
                 $correct_count++;
             }
         }
 
-        // Convert tracking arrays into clean hyphen-separated single strings
-        $final_question_string = implode("-", $compiled_q_nums); // "1-2-3-4-5-6-7-8-9-10"
-        $final_answer_string   = implode("-", $compiled_u_ans);   // "A-B-C-D-A-D-B-C-D-A"
+        $final_question_string = implode("-", $compiled_q_nums); 
+        $final_answer_string   = implode("-", $compiled_u_ans);   
 
-        // Recalculate score metrics based on text file limits
         if ($total_questions > 0) {
             $final_grade = ($correct_count / $total_questions) * 100;
             $final_grade = round($final_grade, 2);
@@ -121,22 +114,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_exam']) && !$ac
             $final_grade = 0.00;
         }
 
-        // 🛠️ COMPRESSION OVERWRITE INSERTION: Commit everything as ONE single row item
+        // 🛠️ Safe REPLACE query ensuring no unique primary keys clash on duplicate attempts
         $stmt_score = $db->prepare("REPLACE INTO `scores` (`username`, `course_id`, `question_number`, `user_answer`) VALUES (?, ?, ?, ?)");
         $stmt_score->bind_param("ssss", $user_check, $selected_course, $final_question_string, $final_answer_string);
         $stmt_score->execute();
         $stmt_score->close();
 
-        // Push final grade data to the core gradebook matrix grid
-        $stmt_grade = $db->prepare("REPLACE INTO `gradebook` (`username`, `courses`, `Grade`) VALUES (?, ?, ?)");
-        $stmt_grade->bind_param("ssd", $user_check, $selected_course, $final_grade);
+        // Increment tracking execution number locally
+        $total_attempts++; 
+
+        // Update Gradebook matrix while capturing the highest score and saving the incremented attempts counter
+        $stmt_grade = $db->prepare("INSERT INTO `gradebook` (`username`, `courses`, `Grade`, `attempts`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE `Grade` = GREATEST(`Grade`, VALUES(`Grade`)), `attempts` = `attempts` + 1");
+        $stmt_grade->bind_param("ssdi", $user_check, $selected_course, $final_grade, $total_attempts);
         
         if ($stmt_grade->execute()) {
             $exam_submitted = true;
 
-            // 🔒 SECURITY ARCHIVE LOGGING
-            $log_summary = "Completed Academy Exam Course [".$selected_course."]. Score achieved: [".$final_grade."%]. Data payload condensed to single-row matrix structure.";
+            $log_summary = "Completed Academy Exam Course [".$selected_course."]. Attempt #".$total_attempts.". Score: [".$final_grade."%].";
             record_security_log($db, $login_session, 'INSERT', 'ACADEMY_EXAMS', $selected_course, $log_summary);
+            
+            if ($final_grade >= 80.00) {
+                $result_message = "DATA TRANSMISSION SUCCESSFUL: Examination matrix satisfied with a score of " . $final_grade . "%. Access Granted.";
+            } elseif ($total_attempts == 1) {
+                $result_message = "WARNING: Evaluation score below 80% limit (" . $final_grade . "%). One final remediation attempt has been automatically authorized.";
+            } else {
+                $result_message = "CRITICAL FAIL: Maximum remediation matrix entries exhausted. Score: " . $final_grade . "%. A certified Academy Instructor must manually reset this node.";
+                $access_blocked = true;
+                $block_reason = "CRITICAL LOCKOUT: MAXIMUM ALLOWED ACADEMY REMEDIATION ATTEMPTS EXHAUSTED FOR THIS SECTOR. ACADEMY INSTRUCTOR INTERVENTION REQUIRED.";
+            }
         }
         $stmt_grade->close();
     }
@@ -195,6 +200,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_exam']) && !$ac
                 <div class="lcars-confirmation-panel">
                     <div class="lcars-confirmation-header">DATA TRANSMISSION SUCCESSFUL</div>
                     <div class="lcars-confirmation-text">
+                        <?php echo !empty($result_message) ? htmlspecialchars($result_message) : "The examination matrix has been sealed."; ?><br><br>
                         The examination matrix for <strong><?php echo htmlspecialchars($selected_course); ?></strong> has been sealed and compiled.<br><br>
                         All evaluation answers have been logged into telemetry. <strong>An email containing your full test results will be dispatched shortly.</strong>
                     </div>
@@ -230,7 +236,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_exam']) && !$ac
                                 echo '<div class="question-block">';
                                 echo '<div class="question-text">' . $q_num . '. ' . htmlspecialchars($row['question']) . '</div>';
                                 foreach (['a', 'b', 'c', 'd'] as $letter) {
-                                    if (empty($row[$letter])) continue; // Handle true/false or shorter choices dynamically
+                                    if (empty($row[$letter])) continue; 
                                     $upper_letter = strtoupper($letter);
                                     $req_attr = ($letter === 'a') ? 'required' : '';
                                     echo '<label class="option-label">';
@@ -240,8 +246,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_exam']) && !$ac
                                 }
                                 echo '</div>';
                             }
-                            echo '<button type="submit" name="submit_exam" class="engage-btn">ENGAGE GRADING CYCLE</button>';
-                        } else { echo "<p style='color: var(--lcars-orange);'>NO VALID TELEMETRY FOUND IN THIS ASSIGNMENT FILE.</p>"; }
+                            echo '<button type="submit" name="submit_exam" class="engage-btn">ENGAGE SUBMISSION</button>';
+                        } else {
+                            echo '<p>No evaluation arrays parsed for this terminal location block.</p>';
+                        }
                         ?>
                     </form>
                 <?php } ?>
