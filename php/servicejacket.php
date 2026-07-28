@@ -3,17 +3,12 @@ ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
-// Database Connection Configuration
-$host = 'YOUR INFO'; 
-$dbname = 'DB NAME';
-$username = 'DB USERNAME';
-$password = 'DB PW'; 
+// 1. INCLUDE GLOBAL CONFIGURATION MANAGEMENT
+include("config.php"); 
 
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-} catch (\PDOException $e) {
-    die("Connection failed: " . $e->getMessage());
+// Ensure the local file script maps cleanly to your config's database variable
+if (isset($db) && !isset($conn)) {
+    $conn = $db;
 }
 
 // Extract target username dynamically via standard URL routing parameter
@@ -23,92 +18,109 @@ if (empty($target_user)) {
     die("<div style='background:#cc3333;color:#fff;padding:20px;font-family:monospace;font-weight:bold;'>SYS_ERR: CRITICAL ROUTING FAILURE // NO TARGET PERSONNEL LOG SPECIFIED.</div>");
 }
 
-try {
-    // Dynamic public-facing lookup statement matching via parameterized query
-    $accountSql = "SELECT a.ID, a.username, a.induction_date, a.species, a.promotions_count, a.profile_img, a.bio, a.gender, d.dname, r.rname 
-                   FROM accounts a 
-                   LEFT JOIN divisions d ON a.DivID = d.did 
-                   LEFT JOIN Rank r ON a.RankID = r.RankID 
-                   WHERE a.username = :user";
-    
-    $accountStmt = $pdo->prepare($accountSql);
-    $accountStmt->execute(['user' => $target_user]);
-    $user = $accountStmt->fetch(PDO::FETCH_ASSOC);
+// Initialize structural defaults cleanly
+$user = null;
+$exams = [];
+$sj_data = [];
 
-    $exams = [];
-    $sj_data = [];
-
-    // Initialize all blank fields for safety in case SJ_info entry does not exist yet
-    $fields = [
+$fields = [
     'languages', 'religion', 'height_cm', 'weight_kg', 'hair', 'eyes', 
     'blood_type', 'medical_restrictions', 'other_info', 
     'other_id_marks_features', 'marital_status', 'spouse', 
     'children', 'mother', 'father', 'siblings', 'security_clearance'
 ];
-    foreach ($fields as $f) { $sj_data[$f] = 'N/A'; }
+foreach ($fields as $f) { $sj_data[$f] = 'N/A'; }
 
-    // Query historical qualification matrix rows matching target personnel identifier
-    if ($user) {
-        // Double-check validation matching constraint
-        if ($user['username'] !== $target_user) {
-            die("<div style='background:#cc3333;color:#fff;padding:20px;font-family:monospace;font-weight:bold;'>CRITICAL ERROR: IDENTITY MATRIX MUTATION DETECTED // SECURITY LOCKDOWN ACTIVE.</div>");
-        }
+// Dynamic public-facing lookup statement matching via parameterized MySQLi query
+$accountSql = "SELECT a.ID, a.username, a.induction_date, a.species, a.promotions_count, a.profile_img, a.bio, a.gender, d.dname, r.rname 
+               FROM accounts a 
+               LEFT JOIN divisions d ON a.DivID = d.did 
+               LEFT JOIN Rank r ON a.RankID = r.RankID 
+               WHERE a.username = ?";
 
-        // Fetch Exam history
-        $gradebookSql = "SELECT courses, date_completed FROM gradebook WHERE username = :username ORDER BY date_completed DESC";
-        $gradebookStmt = $pdo->prepare($gradebookSql);
-        $gradebookStmt->execute(['username' => $user['username']]);
-        $exams = $gradebookStmt->fetchAll(PDO::FETCH_ASSOC);
-
-               // Fetch matching specialized metrics from SJ_info using verified username link
-        $sjSql = "SELECT * FROM SJ_info WHERE username = :username LIMIT 1";
-        $sjStmt = $pdo->prepare($sjSql);
-        $sjStmt->execute(['username' => $user['username']]);
-        $fetched_sj = $sjStmt->fetch(PDO::FETCH_ASSOC);
-        
-        // Define fallback array explicitly
-        $sj_data = [];
-        
-        // Directly map columns. If empty or null in the database row, fall back to 'N/A'
-        $sj_data['security_clearance']    = (!empty($fetched_sj['security_clearance']))    ? $fetched_sj['security_clearance']    : 'N/A';
-        $sj_data['languages']             = (!empty($fetched_sj['languages']))             ? $fetched_sj['languages']             : 'N/A';
-        $sj_data['religion']              = (!empty($fetched_sj['religion']))              ? $fetched_sj['religion']              : 'N/A';
-        $sj_data['hair']                  = (!empty($fetched_sj['hair']))                  ? $fetched_sj['hair']                  : 'N/A';
-        $sj_data['eyes']                  = (!empty($fetched_sj['eyes']))                  ? $fetched_sj['eyes']                  : 'N/A';
-        $sj_data['blood_type']            = (!empty($fetched_sj['blood_type']))            ? $fetched_sj['blood_type']            : 'N/A';
-        $sj_data['marital_status']        = (!empty($fetched_sj['marital_status']))        ? $fetched_sj['marital_status']        : 'N/A';
-        $sj_data['spouse']                = (!empty($fetched_sj['spouse']))                ? $fetched_sj['spouse']                : 'N/A';
-        $sj_data['mother']                = (!empty($fetched_sj['mother']))                ? $fetched_sj['mother']                : 'N/A';
-        $sj_data['father']                = (!empty($fetched_sj['father']))                ? $fetched_sj['father']                : 'N/A';
-        $sj_data['children']              = (!empty($fetched_sj['children']))              ? $fetched_sj['children']              : 'N/A';
-        $sj_data['siblings']              = (!empty($fetched_sj['siblings']))              ? $fetched_sj['siblings']              : 'N/A';
-        $sj_data['medical_restrictions']   = (!empty($fetched_sj['medical_restrictions']))   ? $fetched_sj['medical_restrictions']   : 'N/A';
-        $sj_data['other_id_marks_features'] = (!empty($fetched_sj['other_id_marks_features'])) ? $fetched_sj['other_id_marks_features'] : 'N/A';
-        $sj_data['other_info']            = (!empty($fetched_sj['other_info']))            ? $fetched_sj['other_info']            : 'N/A';
-
-        // Custom Imperial Height Conversion
-        $display_height = "N/A";
-        if (!empty($fetched_sj['height_cm']) && is_numeric($fetched_sj['height_cm'])) {
-            $total_inches = $fetched_sj['height_cm'] / 2.54;
-            $feet = floor($total_inches / 12);
-            $inches = round($total_inches % 12, 1);
-            $display_height = $feet . "' " . $inches . "\"";
-        }
-
-        // Custom Imperial Weight Conversion
-        $display_weight = "N/A";
-        if (!empty($fetched_sj['weight_kg']) && is_numeric($fetched_sj['weight_kg'])) {
-            $display_weight = round($fetched_sj['weight_kg'] * 2.20462, 1) . " LBS";
-        }
-
-    } else {
-        die("<div style='background:#cc3333;color:#fff;padding:20px;font-family:monospace;font-weight:bold;'>SYS_ERR: RECOVERY FAILED // REQUESTED PERSONNEL RECORD NOT FOUND IN ACTIVE REGISTRY.</div>");
+if ($accountStmt = $conn->prepare($accountSql)) {
+    $accountStmt->bind_param("s", $target_user);
+    $accountStmt->execute();
+    $res = $accountStmt->get_result();
+    if ($res && $res->num_rows > 0) {
+        $user = $res->fetch_assoc();
     }
-} catch (\PDOException $e) {
-    die("Data extraction error: " . $e->getMessage());
+    $accountStmt->close();
+} else {
+    die("Data extraction error: Failed to prepare account registry statement.");
 }
 
-$profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfilePics/Default_Profile_Pic.png';
+// Query historical qualification matrix rows matching target personnel identifier
+if ($user) {
+    // Double-check validation matching constraint
+    if ($user['username'] !== $target_user) {
+        die("<div style='background:#cc3333;color:#fff;padding:20px;font-family:monospace;font-weight:bold;'>CRITICAL ERROR: IDENTITY MATRIX MUTATION DETECTED // SECURITY LOCKDOWN ACTIVE.</div>");
+    }
+
+    // Fetch Exam history via MySQLi Prepared Statement
+    $gradebookSql = "SELECT courses, date_completed FROM gradebook WHERE username = ? ORDER BY date_completed DESC";
+    if ($gradebookStmt = $conn->prepare($gradebookSql)) {
+        $gradebookStmt->bind_param("s", $user['username']);
+        $gradebookStmt->execute();
+        $res_grade = $gradebookStmt->get_result();
+        if ($res_grade) {
+            while ($row = $res_grade->fetch_assoc()) {
+                $exams[] = $row;
+            }
+        }
+        $gradebookStmt->close();
+    }
+
+    // Fetch matching specialized metrics from SJ_info using verified username link
+    $sjSql = "SELECT * FROM SJ_info WHERE username = ? LIMIT 1";
+    if ($sjStmt = $conn->prepare($sjSql)) {
+        $sjStmt->bind_param("s", $user['username']);
+        $sjStmt->execute();
+        $res_sj = $sjStmt->get_result();
+        $fetched_sj = ($res_sj && $res_sj->num_rows > 0) ? $res_sj->fetch_assoc() : [];
+        $sjStmt->close();
+    }
+    
+    // Clear out base array keys to prevent missing offset warnings
+    $sj_data = [];
+    
+    // Directly map columns. If empty or null in the database row, fall back to 'N/A'
+    $sj_data['security_clearance']    = (!empty($fetched_sj['security_clearance']))    ? $fetched_sj['security_clearance']    : 'N/A';
+    $sj_data['languages']             = (!empty($fetched_sj['languages']))             ? $fetched_sj['languages']             : 'N/A';
+    $sj_data['religion']              = (!empty($fetched_sj['religion']))              ? $fetched_sj['religion']              : 'N/A';
+    $sj_data['hair']                  = (!empty($fetched_sj['hair']))                  ? $fetched_sj['hair']                  : 'N/A';
+    $sj_data['eyes']                  = (!empty($fetched_sj['eyes']))                  ? $fetched_sj['eyes']                  : 'N/A';
+    $sj_data['blood_type']            = (!empty($fetched_sj['blood_type']))            ? $fetched_sj['blood_type']            : 'N/A';
+    $sj_data['marital_status']        = (!empty($fetched_sj['marital_status']))        ? $fetched_sj['marital_status']        : 'N/A';
+    $sj_data['spouse']                = (!empty($fetched_sj['spouse']))                ? $fetched_sj['spouse']                : 'N/A';
+    $sj_data['mother']                = (!empty($fetched_sj['mother']))                ? $fetched_sj['mother']                : 'N/A';
+    $sj_data['father']                = (!empty($fetched_sj['father']))                ? $fetched_sj['father']                : 'N/A';
+    $sj_data['children']              = (!empty($fetched_sj['children']))              ? $fetched_sj['children']              : 'N/A';
+    $sj_data['siblings']              = (!empty($fetched_sj['siblings']))              ? $fetched_sj['siblings']              : 'N/A';
+    $sj_data['medical_restrictions']   = (!empty($fetched_sj['medical_restrictions']))   ? $fetched_sj['medical_restrictions']   : 'N/A';
+    $sj_data['other_id_marks_features'] = (!empty($fetched_sj['other_id_marks_features'])) ? $fetched_sj['other_id_marks_features'] : 'N/A';
+    $sj_data['other_info']            = (!empty($fetched_sj['other_info']))            ? $fetched_sj['other_info']            : 'N/A';
+
+    // Custom Imperial Height Conversion
+    $display_height = "N/A";
+    if (!empty($fetched_sj['height_cm']) && is_numeric($fetched_sj['height_cm'])) {
+        $total_inches = $fetched_sj['height_cm'] / 2.54;
+        $feet = floor($total_inches / 12);
+        $inches = round($total_inches % 12, 1);
+        $display_height = $feet . "' " . $inches . "\"";
+    }
+
+    // Custom Imperial Weight Conversion
+    $display_weight = "N/A";
+    if (!empty($fetched_sj['weight_kg']) && is_numeric($fetched_sj['weight_kg'])) {
+        $display_weight = round($fetched_sj['weight_kg'] * 2.20462, 1) . " LBS";
+    }
+
+} else {
+    die("<div style='background:#cc3333;color:#fff;padding:20px;font-family:monospace;font-weight:bold;'>SYS_ERR: RECOVERY FAILED // REQUESTED PERSONNEL RECORD NOT FOUND IN ACTIVE REGISTRY.</div>");
+}
+
+$profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfilePics/logo.png';
 ?>
 <!DOCTYPE html>
 <html lang="en">
