@@ -1,6 +1,13 @@
 <?php
-// 1. INCLUDE EXISTING SESSION MANAGEMENT
+// 1. INCLUDE EXISTING SESSION AND CONFIG MANAGEMENT
 include("session.php");
+include("config.php"); // 🗄️ Loads your global database configuration connection
+
+// Ensure the local file script maps cleanly to your config's database variable
+if (isset($db) && !isset($conn)) {
+    $conn = $db;
+}
+
 if (isset($_GET['ack']) && $_GET['ack'] == '1') {
     $_SESSION['security_acknowledged'] = true;
 }
@@ -16,20 +23,7 @@ if (!isset($login_session)) {
     exit;
 }
 
-// 2. DATABASE CONFIGURATION
-$host = 'YOUR INFO';
-$db   = 'YOUR DB NAME';
-$user = 'YOUR DB USERNAME';
-$pass = 'YOUR DB PW';
-$charset = 'utf8mb4';
-
-$conn = new mysqli($host, $user, $pass, $db);
-
-if ($conn->connect_error) {
-    die("Terminal Connection Failure: " . $conn->connect_error);
-}
-
-// 3. SECURE AUTHORIZATION CHECK
+// 2. SECURE AUTHORIZATION CHECK
 $stmt_auth = $conn->prepare("SELECT dh FROM accounts WHERE username = ?");
 $stmt_auth->bind_param("s", $login_session);
 $stmt_auth->execute();
@@ -39,19 +33,17 @@ if ($res_auth && $res_auth->num_rows > 0) {
     $current_user = $res_auth->fetch_assoc();
     if ((int)$current_user['dh'] !== 1) {
         $stmt_auth->close();
-        $conn->close();
         header("Location: notauthorized.php?error=access_denied");
         exit;
     }
 } else {
     $stmt_auth->close();
-    $conn->close();
     header("Location: notauthorized.php");
     exit;
 }
 $stmt_auth->close();
 
-// 4. FETCH ALL ACCOUNTS FOR THE DROPDOWN LIST
+// 3. FETCH ALL ACCOUNTS FOR THE DROPDOWN LIST
 $sql_all = "SELECT ID, DisplayName, username FROM accounts ORDER BY DisplayName ASC";
 $result_all = $conn->query($sql_all);
 
@@ -62,7 +54,7 @@ if ($result_all && $result_all->num_rows > 0) {
     }
 }
 
-// 5. IF A MEMBER IS SELECTED, FETCH THEIR BASE ACCOUNT & SJ_INFO DETAILS
+// 4. IF A MEMBER IS SELECTED, FETCH THEIR BASE ACCOUNT & SJ_INFO DETAILS
 $selected_id = isset($_GET['member_id']) ? intval($_GET['member_id']) : 0;
 $member_data = [];
 $sj_data = [];
@@ -96,7 +88,7 @@ if ($selected_id > 0) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>RP GROUP - Admin Terminal</title><style>:root{--lcars-purple:#9966cc;--lcars-orange:#ff9900;--lcars-pink:#cc6699;--lcars-blue:#33ccff;--lcars-dark-blue:#5588ff;--lcars-bg:#000000}body{background-color:var(--lcars-bg);color:#fff;font-family:"Arial Custom","Helvetica Neue",Arial,sans-serif;margin:0;padding:15px;text-transform:uppercase;letter-spacing:1px;overflow-x:hidden}.lcars-header{display:flex;align-items:flex-end;margin-bottom:15px}.lcars-bar-top{background-color:var(--lcars-purple);height:40px;flex-grow:1;border-bottom-left-radius:20px;margin-right:15px;position:relative}.lcars-bar-top::before{content:"SD-2026";position:absolute;left:25px;bottom:3px;color:#000;font-weight:bold;font-size:14px}.lcars-title{color:var(--lcars-orange);font-size:28px;font-weight:300;margin:0;line-height:1;white-space:nowrap}.lcars-container{display:flex;min-height:calc(100vh - 120px)}.lcars-left-bracket{width:150px;display:flex;flex-direction:column;margin-right:20px}.lcars-elbow{background-color:var(--lcars-purple);height:60px;border-top-left-radius:20px;border-bottom-left-radius:20px;margin-bottom:15px;position:relative}.lcars-elbow::after{content:"";position:absolute;background-color:var(--lcars-bg);width:110px;height:35px;bottom:0;right:0;border-top-left-radius:15px}.lcars-menu{display:flex;flex-direction:column;gap:8px}.lcars-btn{background-color:var(--lcars-orange);color:#000;padding:10px 15px;text-decoration:none;font-weight:bold;font-size:13px;text-align:right;border-radius:5px 0 0 5px;transition:background .2s;border:none;cursor:pointer;font-family:inherit;letter-spacing:inherit}.lcars-btn:hover{background-color:#fcc}.btn-blue{background-color:var(--lcars-blue)}.btn-blue:hover{background-color:#88e2ff}.btn-pink{background-color:var(--lcars-pink)}.btn-pink:hover{background-color:#ff99cc}.btn-logout{background-color:#c33;color:#fff;margin-top:20px}.btn-logout:hover{background-color:#f55}.lcars-main-panel{flex-grow:1;display:flex;flex-direction:column}.lcars-user-banner{border-bottom:4px solid var(--lcars-blue);padding-bottom:10px;margin-bottom:25px;display:flex;justify-content:space-between;align-items:center}.lcars-user-banner h1{margin:0;font-size:22px;color:var(--lcars-blue);font-weight:normal}.system-status{font-size:12px;color:var(--lcars-dark-blue)}.lcars-admin-section{background-color:#111116;border-left:6px solid var(--lcars-purple);padding:20px;border-radius:0 8px 8px 0;margin-bottom:25px}.lcars-admin-section h3{margin:0 0 15px 0;color:var(--lcars-purple);font-size:18px}.form-row{display:flex;flex-direction:column;margin-bottom:15px}.form-row label{color:var(--lcars-blue);font-size:12px;margin-bottom:5px;font-weight:bold}.lcars-input,.lcars-select{background-color:#000;border:2px solid var(--lcars-dark-blue);color:#fff;padding:10px;font-size:14px;border-radius:4px;font-family:inherit;letter-spacing:1px;text-transform:uppercase;width:100%;box-sizing:border-box}.lcars-input:focus,.lcars-select:focus{outline:none;border-color:var(--lcars-blue)}.lcars-select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://w3.org' width='100' height='50'><polygon points='0,0 100,0 50,50' style='fill:%2333ccff;'/></svg>");background-repeat:no-repeat;background-size:12px 6px;background-position:right 15px center;padding-right:30px}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}.form-actions{display:flex;gap:15px;margin-top:10px}.form-actions .lcars-btn{border-radius:4px;text-align:center;min-width:120px}.field-tip{font-size:11px;color:#aaa;text-transform:none;margin-top:5px}
+    <title>RPGROUP - Admin Terminal</title><style>:root{--lcars-purple:#9966cc;--lcars-orange:#ff9900;--lcars-pink:#cc6699;--lcars-blue:#33ccff;--lcars-dark-blue:#5588ff;--lcars-bg:#000000}body{background-color:var(--lcars-bg);color:#fff;font-family:"Arial Custom","Helvetica Neue",Arial,sans-serif;margin:0;padding:15px;text-transform:uppercase;letter-spacing:1px;overflow-x:hidden}.lcars-header{display:flex;align-items:flex-end;margin-bottom:15px}.lcars-bar-top{background-color:var(--lcars-purple);height:40px;flex-grow:1;border-bottom-left-radius:20px;margin-right:15px;position:relative}.lcars-bar-top::before{content:"SD-2026";position:absolute;left:25px;bottom:3px;color:#000;font-weight:bold;font-size:14px}.lcars-title{color:var(--lcars-orange);font-size:28px;font-weight:300;margin:0;line-height:1;white-space:nowrap}.lcars-container{display:flex;min-height:calc(100vh - 120px)}.lcars-left-bracket{width:150px;display:flex;flex-direction:column;margin-right:20px}.lcars-elbow{background-color:var(--lcars-purple);height:60px;border-top-left-radius:20px;border-bottom-left-radius:20px;margin-bottom:15px;position:relative}.lcars-elbow::after{content:"";position:absolute;background-color:var(--lcars-bg);width:110px;height:35px;bottom:0;right:0;border-top-left-radius:15px}.lcars-menu{display:flex;flex-direction:column;gap:8px}.lcars-btn{background-color:var(--lcars-orange);color:#000;padding:10px 15px;text-decoration:none;font-weight:bold;font-size:13px;text-align:right;border-radius:5px 0 0 5px;transition:background .2s;border:none;cursor:pointer;font-family:inherit;letter-spacing:inherit}.lcars-btn:hover{background-color:#fcc}.btn-blue{background-color:var(--lcars-blue)}.btn-blue:hover{background-color:#88e2ff}.btn-pink{background-color:var(--lcars-pink)}.btn-pink:hover{background-color:#ff99cc}.btn-logout{background-color:#c33;color:#fff;margin-top:20px}.btn-logout:hover{background-color:#f55}.lcars-main-panel{flex-grow:1;display:flex;flex-direction:column}.lcars-user-banner{border-bottom:4px solid var(--lcars-blue);padding-bottom:10px;margin-bottom:25px;display:flex;justify-content:space-between;align-items:center}.lcars-user-banner h1{margin:0;font-size:22px;color:var(--lcars-blue);font-weight:normal}.system-status{font-size:12px;color:var(--lcars-dark-blue)}.lcars-admin-section{background-color:#111116;border-left:6px solid var(--lcars-purple);padding:20px;border-radius:0 8px 8px 0;margin-bottom:25px}.lcars-admin-section h3{margin:0 0 15px 0;color:var(--lcars-purple);font-size:18px}.form-row{display:flex;flex-direction:column;margin-bottom:15px}.form-row label{color:var(--lcars-blue);font-size:12px;margin-bottom:5px;font-weight:bold}.lcars-input,.lcars-select{background-color:#000;border:2px solid var(--lcars-dark-blue);color:#fff;padding:10px;font-size:14px;border-radius:4px;font-family:inherit;letter-spacing:1px;text-transform:uppercase;width:100%;box-sizing:border-box}.lcars-input:focus,.lcars-select:focus{outline:none;border-color:var(--lcars-blue)}.lcars-select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://w3.org' width='100' height='50'><polygon points='0,0 100,0 50,50' style='fill:%2333ccff;'/></svg>");background-repeat:no-repeat;background-size:12px 6px;background-position:right 15px center;padding-right:30px}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}.form-actions{display:flex;gap:15px;margin-top:10px}.form-actions .lcars-btn{border-radius:4px;text-align:center;min-width:120px}.field-tip{font-size:11px;color:#aaa;text-transform:none;margin-top:5px}
     .lcars-modal-overlay{display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
 .lcars-modal-box{background:#050505;border:4px solid #cc3333;border-radius:15px;max-width:550px;width:100%;padding:25px;box-sizing:border-box;box-shadow:0 0 25px rgba(204,51,51,0.4)}
 .lcars-modal-header{color:#cc3333;font-size:24px;font-weight:bold;border-bottom:3px solid #cc3333;padding-bottom:5px;margin-bottom:15px;display:flex;justify-content:space-between}
