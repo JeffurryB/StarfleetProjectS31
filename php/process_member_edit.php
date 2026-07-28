@@ -2,23 +2,17 @@
 // 1. INCLUDE EXISTING SESSION MANAGEMENT
 include("session.php");
 include("functions.php");
+include("config.php"); // 🗄️ Loads your global database configuration connection
+
+// Ensure the local file script maps cleanly to your config's database variable
+if (isset($db) && !isset($conn)) {
+    $conn = $db;
+}
 
 // Verify that an active administrator is initiating this action
 if (!isset($login_session)) {
     header("Location: notauthorized.php");
     exit;
-}
-
-// 2. DATABASE CONFIGURATION
-$servername = "YOUR INFO";
-$username = "DB USERNAME";
-$password = "DB PW";
-$dbname = "DB NAME";
-
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-if ($conn->connect_error) {
-    die("Terminal Connection Failure: " . $conn->connect_error);
 }
 
 // 3. SECURE AUTHORIZATION CHECK (Verify 'dh' column is 1)
@@ -218,5 +212,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 } 
 else 
 {// If someone tries to load this file directly via a browser, reject the request
-    header("Location: dhsystem.php");}$conn->close();
+    header("Location: dhsystem.php");}
+//$conn->close();
 ?>
