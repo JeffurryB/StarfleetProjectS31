@@ -210,7 +210,8 @@ CREATE TABLE `gradebook` (
   `username` varchar(50) NOT NULL,
   `courses` varchar(100) NOT NULL,
   `Grade` decimal(5,2) NOT NULL,
-  `date_completed` timestamp NULL DEFAULT current_timestamp()
+  `date_completed` timestamp NULL DEFAULT current_timestamp(),
+  `attempts` int(11) NOT NULL DEFAULT 0
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
 
 -- --------------------------------------------------------
