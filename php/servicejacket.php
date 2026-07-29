@@ -101,14 +101,15 @@ if ($user) {
     $sj_data['other_id_marks_features'] = (!empty($fetched_sj['other_id_marks_features'])) ? $fetched_sj['other_id_marks_features'] : 'N/A';
     $sj_data['other_info']            = (!empty($fetched_sj['other_info']))            ? $fetched_sj['other_info']            : 'N/A';
 
-    // Custom Imperial Height Conversion
-    $display_height = "N/A";
-    if (!empty($fetched_sj['height_cm']) && is_numeric($fetched_sj['height_cm'])) {
-        $total_inches = $fetched_sj['height_cm'] / 2.54;
-        $feet = floor($total_inches / 12);
-        $inches = round($total_inches % 12, 1);
-        $display_height = $feet . "' " . $inches . "\"";
-    }
+   // Custom Imperial Height Conversion
+$display_height = "N/A";
+if (!empty($fetched_sj['height_cm']) && is_numeric($fetched_sj['height_cm'])) {
+    $total_inches = $fetched_sj['height_cm'] / 2.54;
+    $feet = floor($total_inches / 12);
+    // Use fmod() instead of % to safely handle float numbers
+    $inches = round(fmod($total_inches, 12), 1);
+    $display_height = $feet . "' " . $inches . "\"";
+}
 
     // Custom Imperial Weight Conversion
     $display_weight = "N/A";
