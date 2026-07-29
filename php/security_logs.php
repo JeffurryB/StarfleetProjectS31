@@ -12,7 +12,7 @@ if ($res_auth && $auth_data = mysqli_fetch_assoc($res_auth)) {
 $log_res = mysqli_query($db, "SELECT * FROM `security_logs` ORDER BY `log_id` DESC LIMIT 100");
 ?>
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>LCARS - Security Audit Log</title>
+<html lang="en"><head><meta charset="UTF-8"><title>[<?php echo GROUP_ABBR; ?>] - Security Audit Log</title>
 <style>
     :root { --r: #cc3333; --dr: #551111; --o: #ff9900; --b: #33ccff; --bg: #000000; --a: #ffcc33; }
     body { background: var(--bg); color: #fff; font-family: Arial, sans-serif; margin: 0; padding: 15px; text-transform: uppercase; letter-spacing: 1px; }
@@ -44,7 +44,7 @@ $log_res = mysqli_query($db, "SELECT * FROM `security_logs` ORDER BY `log_id` DE
     <header class="h"><div class="hb"></div><h2 class="ht">⚠️ AUDIT LOG SYSTEM ⚠️</h2></header>
     <div class="c">
         <nav class="lb"><div class="le"></div><div class="m">
-            <a href="dhpanel.php" class="btn">DH PANEL</a><a href="welcome.php" class="btn bb">MAIN TERM</a><a href="security_logs.php" class="btn br">AUDIT LOGS</a>
+            <a href="dhpanel.php" class="btn">DH PANEL</a><a href="welcome.php" class="btn bb">MAIN TERM</a><a href="security_logs_export.php" class="btn br">EXPORT LOGS</a>
             <!-- This button calls your new secure script line -->
 <a href="clear_logs.php" class="btn br" onclick="return confirm('⚠️ CRITICAL COMMAND ALERT: CONFIRM RECONSTITUTION WIPE OF TOTAL SECTOR LOG MANIFEST?');" style="margin-top: 15px; text-align: center; display: block; border: 2px dashed #ff0000;">PURGE ARCHIVE</a>
 
