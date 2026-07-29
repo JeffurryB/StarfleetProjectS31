@@ -25,13 +25,11 @@ if ($res_auth && $res_auth->num_rows > 0) {
     $current_user = $res_auth->fetch_assoc();
     if ((int)$current_user['dh'] !== 1) {
         $stmt_auth->close();
-        $conn->close();
         header("Location: notauthorized.php?error=access_denied");
         exit;
     }
 } else {
     $stmt_auth->close();
-    $conn->close();
     header("Location: notauthorized.php");
     exit;
 }
@@ -49,18 +47,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     }
 
     // Capture, trim, and sanitize standard form inputs
-    $displayName = trim($_POST['DisplayName']);
-    $userLogon   = trim($_POST['username']);
-    $emailAddr   = trim($_POST['email']);
-    $rankID      = trim($_POST['RankID']);
-    $titleID     = trim($_POST['TitleID']);
-    $divID       = trim($_POST['DivID']);
-    $speciesType = trim($_POST['species']);
-    $birthPlace  = trim($_POST['birth_place']);
+    $displayName   = trim($_POST['DisplayName']);
+    $userLogon     = trim($_POST['username']);
+    $emailAddr     = trim($_POST['email']);
+    $rankID        = trim($_POST['RankID']);
+    $titleID       = trim($_POST['TitleID']);
+    $divID         = trim($_POST['DivID']);
+    $speciesType   = trim($_POST['species']);
+    $raw_gender    = trim($_POST['gender']);
+    $birthPlace    = trim($_POST['birth_place']);
     $inductiondate = trim($_POST['induction_date']);
-    $activeState = intval($_POST['active']); // Converts explicitly to 1 or 0
-    $dh = intval($_POST['dh']);
-    $bioNotes    = trim($_POST['bio']);
+    $promotions  = isset($_POST['promotions_count']) ? intval($_POST['promotions_count']) : 0;
+    $activeState   = intval($_POST['active']); // Converts explicitly to 1 or 0
+    $dh            = intval($_POST['dh']);
+    $bioNotes      = trim($_POST['bio']);
+    
+    // 🛠️ Map Numeric Gender Choices (1, 2, 3) to DB String Layout Values
+   // $raw_gender = $_POST['gender'] ?? '';
+
+if ($raw_gender === 'Male' || $raw_gender === '1') {
+    $gender = 1;
+} elseif ($raw_gender === 'Female' || $raw_gender === '2') {
+    $gender = 2;
+} elseif ($raw_gender === 'Other' || $raw_gender === '3') {
+    $gender = 3;
+} else {
+    $gender = 0; // Default fallback for unselected/unknown
+}
     
     // NEW: Capture and sanitize SJ_info service jacket fields
     $languages    = isset($_POST['languages']) ? trim($_POST['languages']) : '';
@@ -90,18 +103,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $changes = []; 
     
     if ($res_old && $old = $res_old->fetch_assoc()) {
-        if ($old['DisplayName'] !== $displayName)   $changes[] = "DisplayName changed to [".$displayName."]";
-        if ($old['username'] !== $userLogon)       $changes[] = "Username changed to [".$userLogon."]";
-        if ($old['email'] !== $emailAddr)           $changes[] = "Email changed to [".$emailAddr."]";
-        if ($old['RankID'] != $rankID)             $changes[] = "RankID changed to [".$rankID."]";
-        if ($old['TitleID'] != $titleID)           $changes[] = "TitleID changed to [".$titleID."]";
-        if ($old['DivID'] != $divID)               $changes[] = "DivID changed to [".$divID."]";
-        if ($old['species'] !== $speciesType)       $changes[] = "Species changed to [".$speciesType."]";
-        if ($old['birth_place'] !== $birthPlace)   $changes[] = "Birth Place changed to [".$birthPlace."]";
+        if ($old['DisplayName'] !== $displayName)      $changes[] = "DisplayName changed to [".$displayName."]";
+        if ($old['username'] !== $userLogon)          $changes[] = "Username changed to [".$userLogon."]";
+        if ($old['email'] !== $emailAddr)              $changes[] = "Email changed to [".$emailAddr."]";
+        if ($old['RankID'] != $rankID)                $changes[] = "RankID changed to [".$rankID."]";
+        if ($old['TitleID'] != $titleID)              $changes[] = "TitleID changed to [".$titleID."]";
+        if ($old['DivID'] != $divID)                  $changes[] = "DivID changed to [".$divID."]";
+        if ($old['species'] !== $speciesType)          $changes[] = "Species changed to [".$speciesType."]";
+        if ($old['gender'] !== $gender)                $changes[] = "Gender changed to [".$gender."]";
+        if ($old['birth_place'] !== $birthPlace)      $changes[] = "Birth Place changed to [".$birthPlace."]";
         if ($old['induction_date'] !== $inductiondate) $changes[] = "Induction Date changed to [".$inductiondate."]";
-        if ((int)$old['active'] !== $activeState)   $changes[] = "Active status changed to [".$activeState."]";
-        if ((int)$old['dh'] !== $dh)                 $changes[] = "Clearance 'dh' changed to [".$dh."]";
-        if ($old['bio'] !== $bioNotes)               $changes[] = "Dossier Bio notes modified.";
+        // 🛠️ FIX: Closed syntax gap on operator symbol check layout
+        if ($old['promotions_count'] != $promotions)   $changes[] = "Promotions changed to [".$promotions."]";
+        if ((int)$old['active'] !== $activeState)      $changes[] = "Active status changed to [".$activeState."]";
+        if ((int)$old['dh'] !== $dh)                    $changes[] = "Clearance 'dh' changed to [".$dh."]";
+        if ($old['bio'] !== $bioNotes)                  $changes[] = "Dossier Bio notes modified.";
     }
     $stmt_old->close();
 
@@ -142,25 +158,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     TitleID = ?, 
                     DivID = ?, 
                     species = ?, 
+                    gender = ?,
                     birth_place = ?, 
                     induction_date = ?,
+                    promotions_count = ?,
                     active = ?,
                     dh = ?,
                     bio = ? 
                    WHERE ID = ?";
 
     $stmt_update = $conn->prepare($update_sql);
+    // 🛠️ FIX: Corrected variable $promotions_count to match our captured $promotions name configuration parameter
     $stmt_update->bind_param(
-        "sssssssssiisi", 
+        "ssssssssssiiisi", 
         $displayName, 
         $userLogon, 
         $emailAddr, 
         $rankID, 
         $titleID, 
         $divID, 
-        $speciesType, 
+        $speciesType,
+        $gender,
         $birthPlace, 
         $inductiondate,
+        $promotions,
         $activeState,
         $dh,
         $bioNotes, 
@@ -180,38 +201,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $stmt_sj_upsert->bind_param(
         "sssddsssssssssssss", 
         $userLogon, $languages, $religion, $height_cm, $weight_kg, $hair, $eyes, $blood_type, 
-        $med_restrict, $other_info, $id_marks, $marital, $spouse, $children, $mother, $father, $siblings, $clearance
-    );
-    
-    $sj_updated = $stmt_sj_upsert->execute();
-    $stmt_sj_upsert->close();
-
+$med_restrict, $other_info, $id_marks, $marital, $spouse, $children, $mother, $father, $siblings, $clearance);$sj_updated = $stmt_sj_upsert->execute();$stmt_sj_upsert->close();
     // 7. FINALIZE ACTION & LOG TERMINAL MATRIX
     if ($accounts_updated && $sj_updated) {
-        
         // Execute the global logging helper function using our smart telemetry string
-        record_security_log(
-            $conn, 
-            $login_session,      // The active administrator username logged in
-            'UPDATE',            // The database operation flag type
-            'PERSONNEL',         // The specific module name targeted
-            $userLogon,          // The profile username string being modified
-            $log_summary         // The dynamically compiled telemetry text detailing changes only
-        );
-        
-        $db = $conn;
-        include("sync_tags.php");
-        
-// Redirection route confirming synchronization success
-        header("Location: dhsystem.php?member_id=" . $target_member_id . "&status=synchronized");
-    } 
-    else 
-    {// Fallback error protocol redirection route
-        header("Location: dhsystem.php?member_id=" . $target_member_id . "&status=failure");
-    }
-} 
-else 
-{// If someone tries to load this file directly via a browser, reject the request
-    header("Location: dhsystem.php");}
-//$conn->close();
+        record_security_log($conn,$login_session,      
+                            // The active administrator username logged in
+                            'UPDATE',            
+                            // The database operation flag type
+                            'PERSONNEL',         
+                            // The specific module name targeted
+                            $userLogon,          
+                            // The profile username string being modified
+                            $log_summary         
+                            // The dynamically compiled telemetry text detailing changes only
+                           );$db = $conn;include("sync_tags.php");
+        // Redirection route confirming synchronization success
+        header("Location: dhsystem.php?member_id=" . $target_member_id . "&status=synchronized");exit();} else {
+        // Fallback error protocol redirection route
+        header("Location: dhsystem.php?member_id=" . $target_member_id . "&status=failure");exit();}} else {
+    // If someone tries to load this file directly via a browser, reject the request
+    header("Location: dhsystem.php");exit();}
 ?>
