@@ -1,6 +1,8 @@
 # Star Trek RolePlay Group
 Repository for Star Trek RP Group Webpage, Database, and all in-world scripts
 
+https://github.com/JeffurryB/StarfleetProjectS31/wiki/Demo-Site
+
 The Officer Rank Structure is as follows:
 
 - 1 Ensign
