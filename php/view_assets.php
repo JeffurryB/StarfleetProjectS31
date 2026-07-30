@@ -29,7 +29,7 @@ if ($res_auth && $res_auth->num_rows > 0) {
     $current_user = $res_auth->fetch_assoc();
     if ((int)$current_user['dh'] !== 1) {
         $stmt_auth->close();
-        header("Location: notauthorized.php?error=access_denied");
+        header("Location: notauthorized.php?error=clearance_insufficient");
         exit;
     }
 } else {
@@ -39,14 +39,82 @@ if ($res_auth && $res_auth->num_rows > 0) {
 }
 $stmt_auth->close();
 
-// 2. FETCH ALL ASSETS FROM IN-WORLD DATA GRID TABLE
+// 🛠️ SUBSYSTEM MODULE: SECURE ASSET REMOVAL PROCESSOR WITH DETAILED AUDITING LOGS
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['action'] === 'delete_asset') {
+    $target_delete_id = isset($_POST['delete_aid']) ? intval($_POST['delete_aid']) : 0;
+
+    if ($target_delete_id > 0) {
+        // 📡 1. PRE-DELETION SCAN: Capture the metadata before it is deleted from the database
+        $asset_name = "UNKNOWN_NAME";
+        $asset_uuid = "UNKNOWN_UUID";
+        $asset_type = "UNKNOWN_TYPE";
+        
+        $fetch_sql = "SELECT name, uuid, type FROM assets WHERE aid = ? LIMIT 1";
+        if ($stmt_fetch = $conn->prepare($fetch_sql)) {
+            $stmt_fetch->bind_param("i", $target_delete_id);
+            $stmt_fetch->execute();
+            $res_fetch = $stmt_fetch->get_result();
+            if ($res_fetch && $row_fetch = $res_fetch->fetch_assoc()) {
+                $asset_name = $row_fetch['name'];
+                $asset_uuid = $row_fetch['uuid'];
+                $asset_type = $row_fetch['type'];
+            }
+            $stmt_fetch->close();
+        }
+
+        // Start a transactional operation to guarantee all operations pass or fail as one block
+        $conn->begin_transaction();
+
+        try {
+            // Delete from child permission mapping matrix first to prevent constraint violations
+            $delete_perms_sql = "DELETE FROM asset_perms WHERE asset_id = ?";
+            $stmt_del_p = $conn->prepare($delete_perms_sql);
+            $stmt_del_p->bind_param("i", $target_delete_id);
+            $stmt_del_p->execute();
+            $stmt_del_p->close();
+
+            // Delete from parent registry matrix
+            $delete_asset_sql = "DELETE FROM assets WHERE aid = ?";
+            $stmt_del_a = $conn->prepare($delete_asset_sql);
+            $stmt_del_a->bind_param("i", $target_delete_id);
+            $stmt_del_a->execute();
+            $stmt_del_a->close();
+
+            // Commit transaction changes down to database tables
+            $conn->commit();
+            
+            // 📝 2. DETAILED SECURITY TELEMETRY LOG: Writes complete name, uuid, and type to security_logs
+            $log_telemetry = "Permanently purged asset registry record. Designation: [" . $asset_name . "] // UUID Token: [" . $asset_uuid . "] // Class ID: [" . $asset_type . "]. Relational permission sets deleted completely.";
+            
+            record_security_log(
+                $conn, 
+                $login_session,      // The admin username committing the delete
+                'DELETE',            // The log database action type 
+                'ASSETS',            // The dashboard module system block
+                $asset_name,         // TARGET identifier field
+                $log_telemetry       // Detailed text entry listing exactly what was removed
+            );
+            
+            // Refresh layout matrix view state with clean status message
+            header("Location: view_assets.php?status=deleted");
+            exit();
+        } catch (Exception $e) {
+            // Roll back the entire operation safely if database interruptions happen
+            $conn->rollback();
+            $delete_error = "SYS_ERR: DELETION CORE ROUTINE ENCOUNTERED INTERRUPT OVERLAY REJECTION.";
+        }
+    }
+}
+
+// 2. FETCH ALL ASSETS JOINED WITH THEIR RELATIONAL PERMISSION SETS
 $all_assets = [];
-// Queries target schema table fields: aid, uuid, type, name
-$sql_assets = "SELECT aid, uuid, type, name FROM assets ORDER BY name ASC";
+$sql_assets = "SELECT a.aid, a.uuid, a.type, a.name, p.Modify, p.Copy, p.Transfer 
+               FROM assets a 
+               LEFT JOIN asset_perms p ON a.aid = p.asset_id 
+               ORDER BY a.name ASC";
 $result_assets = $conn->query($sql_assets);
 
 if ($result_assets && $result_assets->num_rows > 0) {
-    /* @var mysqli_result $result_assets */
     while ($row = $result_assets->fetch_assoc()) {
         $all_assets[] = $row;
     }
@@ -62,7 +130,7 @@ if ($result_assets && $result_assets->num_rows > 0) {
             --lcars-purple: #9966cc; --lcars-orange: #ff9900;
             --lcars-pink: #cc6699; --lcars-blue: #33ccff;
             --lcars-bg: #000000; --lcars-green: #33cc33;
-            --lcars-dark-red: #331111;
+            --lcars-dark-red: #441111;
         }
         body {
             background-color: var(--lcars-bg); color: #ffffff;
@@ -89,6 +157,15 @@ if ($result_assets && $result_assets->num_rows > 0) {
         .asset-name { color: var(--lcars-orange); font-weight: bold; text-transform: uppercase; font-family: Arial, sans-serif; }
         .asset-type { color: var(--lcars-blue); text-transform: uppercase; }
         .asset-uuid { color: #888888; }
+        
+        /* Asset Permissions Badges Blocks */
+        .perm-badge-container { display: flex; gap: 6px; font-family: "Courier New", Courier, monospace; font-weight: bold; font-size: 14px; }
+        .perm-flag { padding: 2px 8px; border-radius: 3px; display: inline-block; text-align: center; min-width: 14px; }
+        .perm-allowed { background-color: #113311; color: var(--lcars-green); border: 1px solid var(--lcars-green); }
+        .perm-denied { background-color: var(--lcars-dark-red); color: #773333; border: 1px solid #552222; }
+        .telemetry-banner { padding: 15px; font-weight: bold; font-size: 13px; margin-bottom: 20px; border-radius: 4px; border-left: 6px solid; text-transform: none; }
+        .telemetry-success { background-color: #112211; color: #55ff55; border-left-color: var(--lcars-green); }
+        .telemetry-failure { background-color: #221111; color: #ff5555; border-left-color: #cc3333; }
     </style>
 </head>
 <body>
@@ -101,7 +178,7 @@ if ($result_assets && $result_assets->num_rows > 0) {
         <!-- Left Sidebar Navigation Block -->
         <nav class="lcars-left-bracket">
             <div class="lcars-elbow"></div>
-            <a href="dhpanel.php" class="lcars-btn">CENTRAL</a>
+            <a href="welcome.php" class="lcars-btn">CENTRAL</a>
             <a href="asset.php" class="lcars-btn" style="background-color: var(--lcars-pink);">ASSET MGT</a>
         </nav>
         
@@ -111,16 +188,30 @@ if ($result_assets && $result_assets->num_rows > 0) {
             <p style="text-transform: none; color: #aaa; margin-bottom: 20px;">
                 Authorized Terminal Node: <strong><?php echo htmlspecialchars($login_session); ?></strong> [CLEARANCE: LEVEL 1 MASTER ADMIN]
             </p>
+
+            <?php if (isset($_GET['status']) && $_GET['status'] === 'deleted'): ?>
+                <div class="telemetry-banner telemetry-success">
+                    OK | TERMINAL CONFIRMATION: ASSET CORE RECORD PURGED FROM FLEET DATA REGISTRY.
+                </div>
+            <?php endif; ?>
+
+            <?php if (isset($delete_error)): ?>
+                <div class="telemetry-banner telemetry-failure">
+                    <?php echo htmlspecialchars($delete_error); ?>
+                </div>
+            <?php endif; ?>
             
             <div class="manifest-container">
                 <?php if (!empty($all_assets)): ?>
                     <table class="manifest-table">
                         <thead>
                             <tr>
-                                <th style="width: 8%;">AID</th>
-                                <th style="width: 30%;">ASSET NAME</th>
+                                <th style="width: 6%;">AID</th>
+                                <th style="width: 24%;">ASSET NAME</th>
                                 <th style="width: 15%;">RESOURCE TYPE</th>
-                                <th style="width: 47%;">GRID OBJECT UUID (IN-WORLD SECTOR)</th>
+                                <th style="width: 35%;">GRID OBJECT UUID (IN-WORLD SECTOR)</th>
+                                <th style="width: 12%;">PERMISSIONS (MCT)</th>
+                                <th style="width: 8%;">ACTION</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -130,8 +221,32 @@ if ($result_assets && $result_assets->num_rows > 0) {
                                     <td class="asset-name"><?php echo htmlspecialchars($asset['name']); ?></td>
                                     <td class="asset-type"><?php echo htmlspecialchars($asset['type']); ?></td>
                                     <td class="asset-uuid"><?php echo htmlspecialchars($asset['uuid']); ?></td>
+                                    
+                                    <td>
+                                        <div class="perm-badge-container">
+                                            <span class="perm-flag <?php echo ((int)$asset['Modify'] === 1) ? 'perm-allowed' : 'perm-denied'; ?>">
+                                                <?php echo ((int)$asset['Modify'] === 1) ? 'M' : '-'; ?>
+                                            </span>
+                                            <span class="perm-flag <?php echo ((int)$asset['Copy'] === 1) ? 'perm-allowed' : 'perm-denied'; ?>">
+                                                <?php echo ((int)$asset['Copy'] === 1) ? 'C' : '-'; ?>
+                                            </span>
+                                            <span class="perm-flag <?php echo ((int)$asset['Transfer'] === 1) ? 'perm-allowed' : 'perm-denied'; ?>">
+                                                <?php echo ((int)$asset['Transfer'] === 1) ? 'T' : '-'; ?>
+                                            </span>
+                                        </div>
+                                    </td>
+
+                                    <td>
+                                        <form method="POST" action="" onsubmit="return confirm('WARNING: CRITICAL SYSTEM CMD // PURGE THIS ASSET DATA MATRIX PERMANENTLY?');" style="margin:0; padding:0;">
+                                            <input type="hidden" name="action" value="delete_asset">
+                                            <input type="hidden" name="delete_aid" value="<?php echo (int)$asset['aid']; ?>">
+                                            <button type="submit" class="lcars-btn" style="background-color: #cc3333; color: #ffffff; padding: 4px 8px; font-size: 11px; text-align: center; width: 100%; border-radius: 3px; cursor: pointer;">
+                                                DELETE
+                                            </button>
+                                        </form>
+                                    </td>
                                 </tr>
-                            <?php endforeach; // 🛠️ FIXED: Replaced invalid endphp with endforeach ?>
+                            <?php endforeach; ?>
                         </tbody>
                     </table>
                 <?php else: ?>
