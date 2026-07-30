@@ -74,6 +74,22 @@ CREATE TABLE `assets` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `asset_perms`
+--
+
+CREATE TABLE `asset_perms` (
+  `id` INT(11) NOT NULL AUTO_INCREMENT,
+  `asset_id` INT(11) NOT NULL,
+  `Modify` TINYINT(1) NOT NULL DEFAULT 0,
+  `Copy` TINYINT(1) NOT NULL DEFAULT 0,
+  `Transfer` TINYINT(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_asset` (`asset_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `asset_types`
 --
 
