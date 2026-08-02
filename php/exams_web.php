@@ -7,7 +7,8 @@ include('functions.php'); // 🔒 LOAD SECURITY ARCHIVE LOG HELPER
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-$user_check = mysqli_real_escape_string($db, $login_session);
+// PREPARED FIX: No need to escape $login_session here anymore as we bind it safely later
+$user_check = $login_session;
 
 $exam_submitted = false;
 $access_blocked = false;
@@ -18,7 +19,8 @@ $result_message = "";
 $course_directory = "doc/sdq_exams/";
 $text_files = glob($course_directory . "*.txt");
 
-$selected_course = isset($_GET['courses']) ? mysqli_real_escape_string($db, $_GET['courses']) : '';
+// PREPARED FIX: Accept parameter purely as a raw string without old-school escaping
+$selected_course = isset($_GET['courses']) ? $_GET['courses'] : '';
 
 if (empty($selected_course) && !empty($text_files)) {
     $selected_course = basename($text_files[0], ".txt");
@@ -61,22 +63,34 @@ if (!empty($selected_course) && file_exists($target_file_path)) {
 // 3. RETAKE & SECURITY VERIFICATION POLICY
 $total_attempts = 0; // Default to 0 for a brand new user
 if (!empty($selected_course)) {
-    // 📊 Read the exact Grade and Attempts directly from your new gradebook structure
-    $check_grade_query = mysqli_query($db, "SELECT Grade, attempts FROM gradebook WHERE username = '$user_check' AND courses = '$selected_course' LIMIT 1");
+    // 📊 PREPARED FIX: Converted the vulnerable gradebook check into a prepared statement
+    $stmt_check = mysqli_prepare($db, "SELECT Grade, attempts FROM gradebook WHERE username = ? AND courses = ? LIMIT 1");
     
-    if (mysqli_num_rows($check_grade_query) > 0) {
-        $grade_row = mysqli_fetch_assoc($check_grade_query);
-        $current_grade = $grade_row['Grade'];
-        $total_attempts = intval($grade_row['attempts']);
+    if ($stmt_check) {
+        // Bind parameters safely as strings ("ss")
+        mysqli_stmt_bind_param($stmt_check, "ss", $user_check, $selected_course);
+        mysqli_stmt_execute($stmt_check);
+        
+        // Fetch result secure context matrix
+        $check_grade_query = mysqli_stmt_get_result($stmt_check);
+        
+        if (mysqli_num_rows($check_grade_query) > 0) {
+            $grade_row = mysqli_fetch_assoc($check_grade_query);
+            $current_grade = $grade_row['Grade'];
+            $total_attempts = intval($grade_row['attempts']);
 
-        if ($current_grade >= 80.00) {
-            $access_blocked = true;
-            $block_reason = "CRITICAL LOCKOUT: EFFICIENCY RATING SATISFACTORY (" . $current_grade . "%). RETAKE PARAMETERS DENIED.";
-        } elseif ($total_attempts >= 2) {
-            // Block user instantly if they have already finished 2 or more attempts
-            $access_blocked = true;
-            $block_reason = "CRITICAL LOCKOUT: MAXIMUM ALLOWED ACADEMY REMEDIATION ATTEMPTS EXHAUSTED FOR THIS SECTOR. ACADEMY INSTRUCTOR INTERVENTION REQUIRED.";
+            if ($current_grade >= 80.00) {
+                $access_blocked = true;
+                $block_reason = "CRITICAL LOCKOUT: EFFICIENCY RATING SATISFACTORY (" . $current_grade . "%). RETAKE PARAMETERS DENIED.";
+            } elseif ($total_attempts >= 2) {
+                // Block user instantly if they have already finished 2 or more attempts
+                $access_blocked = true;
+                $block_reason = "CRITICAL LOCKOUT: MAXIMUM ALLOWED ACADEMY REMEDIATION ATTEMPTS EXHAUSTED FOR THIS SECTOR. ACADEMY INSTRUCTOR INTERVENTION REQUIRED.";
+            }
         }
+        mysqli_stmt_close($stmt_check);
+    } else {
+        die("Database handshake failed during Security Policy assessment.");
     }
 }
 
