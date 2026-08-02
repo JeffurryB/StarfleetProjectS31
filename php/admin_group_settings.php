@@ -19,7 +19,13 @@ if (!isset($login_session)) {
     exit;
 }
 
-$user_check = mysqli_real_escape_string($conn, $login_session);
+// 🔒 CSRF TOKEN INITIALIZATION CHECK
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// PREPARED STATEMENT RULE
+$user_check = $login_session;
 $is_owner_validated = false;
 
 // Barrier 2 & 3: The Owner Validation Matrix (ID = 1, dh = 1, security_clearance = 10)
@@ -50,7 +56,7 @@ if (!$is_owner_validated) {
     exit;
 }
 
-// 🛠️ FIXED: Pull the values directly from memory instead of trying to include the file twice
+// Pull the values directly from memory
 $current_group_name = defined('GROUP_NAME') ? GROUP_NAME : "";
 $current_group_abbr = defined('GROUP_ABBR') ? GROUP_ABBR : "";
 
@@ -58,6 +64,13 @@ $message = "";
 
 // 2. HANDLE FORM METRICS SUBMISSION VIA POST OVERLAY
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_group_config') {
+    
+    // 🔒 CSRF DEFENSE MATRIX FIREWALL: Intercept rogue third-party submissions
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        header("HTTP/1.1 403 Forbidden");
+        die("CRITICAL SECURITY ERROR: CSRF MATRIX MALFUNCTION. RE-COMPILATION ABORTED.");
+    }
+
     $group_name = trim(filter_input(INPUT_POST, 'group_name', FILTER_SANITIZE_SPECIAL_CHARS));
     $group_abbr = strtoupper(trim(filter_input(INPUT_POST, 'group_abbr', FILTER_SANITIZE_SPECIAL_CHARS)));
 
@@ -68,8 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
         // Process file stream updates
         $file_jobs = [
-            'group_logo' => ['dir' => 'images/', 'name' => 'logo.png', 'constant' => 'GROUP_LOGO', 'default' => 'images/logo.png'],
-            'default_avatar' => ['dir' => 'ProfilePics/', 'name' => 'default.png', 'constant' => 'DEFAULT_AVATAR', 'default' => 'ProfilePics/default.png']
+            'group_logo' => ['dir' => 'images/', 'name' => 'logo.png'],
+            'default_avatar' => ['dir' => 'ProfilePics/', 'name' => 'default.png']
         ];
 
         foreach ($file_jobs as $form_key => $job) {
@@ -97,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         // Write configuration content down to disk file matrix
         if ($upload_ok) {
             $config_content = "<?php\n";
-            $config_content .= "// Generated Automatically via Master Owner Admin Control Panel Panel\n";
+            $config_content .= "// Generated Automatically via Master Owner Admin Control Panel\n";
             $config_content .= "define('GROUP_NAME', '" . addslashes($group_name) . "');\n";
             $config_content .= "define('GROUP_ABBR', '" . addslashes($group_abbr) . "');\n";
             $config_content .= "define('GROUP_LOGO', 'images/logo.png');\n";
@@ -179,6 +192,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
             <div class="form-container">
                 <form method="POST" action="" enctype="multipart/form-data">
+                    <!-- 🔒 CSRF SHIELD ACTIVE VALUE ARRAY -->
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                     <input type="hidden" name="action" value="update_group_config">
                     
                     <div class="form-row">
