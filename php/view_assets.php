@@ -1,8 +1,11 @@
 <?php
 // 1. Session, Config, and Layout Linkage
-include("session.php");
-include("config.php"); 
-include("functions.php"); // 🔒 Ensures background security logging helpers are accessible
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once("session.php");
+include_once("config.php"); 
+include_once("functions.php"); // 🔒 Ensures background security logging helpers are accessible
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -17,6 +20,11 @@ if (isset($db) && !isset($conn)) {
 if (!isset($login_session)) {
     header("Location: notauthorized.php");
     exit;
+}
+
+// 🔒 CSRF INITIALIZATION MATRIX: Seed authorization verification signatures
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 // Barrier 2: SECURE MASTER AUTHORIZATION CHECK (Verify 'dh' column is exactly 1)
@@ -41,6 +49,13 @@ $stmt_auth->close();
 
 // 🛠️ SUBSYSTEM MODULE: SECURE ASSET REMOVAL PROCESSOR WITH DETAILED AUDITING LOGS
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['action'] === 'delete_asset') {
+    
+    // 🔒 CSRF FIREWALL: Drop cross-site unauthenticated wipe operations instantly
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        header("HTTP/1.1 403 Forbidden");
+        die("CRITICAL SECURITY ERROR: CSRF MATRIX MALFUNCTION. ASSET REPURGING REFUSED.");
+    }
+
     $target_delete_id = isset($_POST['delete_aid']) ? intval($_POST['delete_aid']) : 0;
 
     if ($target_delete_id > 0) {
@@ -235,9 +250,10 @@ if ($result_assets && $result_assets->num_rows > 0) {
                                             </span>
                                         </div>
                                     </td>
-
                                     <td>
                                         <form method="POST" action="" onsubmit="return confirm('WARNING: CRITICAL SYSTEM CMD // PURGE THIS ASSET DATA MATRIX PERMANENTLY?');" style="margin:0; padding:0;">
+                                            <!-- 🔒 CSRF SHIELD VALUE OVERLAY -->
+                                            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                                             <input type="hidden" name="action" value="delete_asset">
                                             <input type="hidden" name="delete_aid" value="<?php echo (int)$asset['aid']; ?>">
                                             <button type="submit" class="lcars-btn" style="background-color: #cc3333; color: #ffffff; padding: 4px 8px; font-size: 11px; text-align: center; width: 100%; border-radius: 3px; cursor: pointer;">
