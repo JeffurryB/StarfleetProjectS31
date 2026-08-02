@@ -26,11 +26,22 @@ if (empty($selected_course) && !empty($text_files)) {
     $selected_course = basename($text_files[0], ".txt");
 }
 
-$parsed_questions = [];
-$target_file_path = $course_directory . $selected_course . ".txt";
+// 🔒 PATH TRAVERSAL FIX: Strip all dots, slashes, and spaces using a strict regex whitelist
+// This sanitizes the variable immediately for both the file system and subsequent database binding
+$selected_course = preg_replace('/[^a-zA-Z0-9_\-]/', '', $selected_course);
 
-if (!empty($selected_course) && file_exists($target_file_path)) {
-    $raw_content = file_get_contents($target_file_path);
+$parsed_questions = [];
+
+// 🔒 PATH TRAVERSAL FIX: Enforce directory containment using basename and realpath validation
+$safe_filename = basename($selected_course);
+$target_file_path = $course_directory . $safe_filename . ".txt";
+
+$real_base_dir = realpath($course_directory);
+$real_target_path = realpath($target_file_path);
+
+// Verify the file exists and that its resolved absolute path is strictly contained within the base folder
+if (!empty($safe_filename) && $real_target_path !== false && strpos($real_target_path, $real_base_dir) === 0 && file_exists($real_target_path)) {
+    $raw_content = file_get_contents($real_target_path);
     $question_blocks = explode("===", $raw_content);
     
     $q_index = 1;
@@ -58,11 +69,15 @@ if (!empty($selected_course) && file_exists($target_file_path)) {
             $q_index++;
         }
     }
+} else {
+    // Graceful fallback if the file path is broken, altered, or malicious
+    $access_blocked = true;
+    $block_reason = "CRITICAL CORES OFFLINE: CHOSEN ACADEMY COURSE SECTOR PATH IS UNRESOLVABLE.";
 }
 
 // 3. RETAKE & SECURITY VERIFICATION POLICY
 $total_attempts = 0; // Default to 0 for a brand new user
-if (!empty($selected_course)) {
+if (!empty($selected_course) && !$access_blocked) {
     // 📊 PREPARED FIX: Converted the vulnerable gradebook check into a prepared statement
     $stmt_check = mysqli_prepare($db, "SELECT Grade, attempts FROM gradebook WHERE username = ? AND courses = ? LIMIT 1");
     
