@@ -1,8 +1,11 @@
 <?php
 // 1. Session, Security, and Configuration Management Links
-include("session.php");
-include("config.php");
-include("functions.php"); // 🔒 Loads security logging tools
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once("session.php");
+include_once("config.php");
+include_once("functions.php"); // 🔒 Loads security logging tools
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -56,9 +59,17 @@ if (!$is_owner_validated) {
     exit;
 }
 
-// Pull the values directly from memory
-$current_group_name = defined('GROUP_NAME') ? GROUP_NAME : "";
-$current_group_abbr = defined('GROUP_ABBR') ? GROUP_ABBR : "";
+// 🛠️ SAFE REFACTOR: Load configuration from a structural JSON data store instead of running raw generated PHP text files
+$config_file = 'group_config.json';
+$config_data = [];
+if (file_exists($config_file)) {
+    $config_data = json_decode(file_get_contents($config_file), true) ?? [];
+}
+
+$current_group_name = $config_data['GROUP_NAME'] ?? (defined('GROUP_NAME') ? GROUP_NAME : "");
+$current_group_abbr = $config_data['GROUP_ABBR'] ?? (defined('GROUP_ABBR') ? GROUP_ABBR : "");
+$current_group_logo = $config_data['GROUP_LOGO'] ?? "images/logo.png";
+$current_default_avatar = $config_data['DEFAULT_AVATAR'] ?? "ProfilePics/default.png";
 
 $message = "";
 
@@ -79,45 +90,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     } else {
         $upload_ok = true;
 
-        // Process file stream updates
+        // Process file stream updates securely
         $file_jobs = [
-            'group_logo' => ['dir' => 'images/', 'name' => 'logo.png'],
-            'default_avatar' => ['dir' => 'ProfilePics/', 'name' => 'default.png']
+            'group_logo' => ['dir' => 'images/', 'prefix' => 'logo_', 'target_var' => 'current_group_logo'],
+            'default_avatar' => ['dir' => 'ProfilePics/', 'prefix' => 'avatar_', 'target_var' => 'current_default_avatar']
         ];
 
         foreach ($file_jobs as $form_key => $job) {
-            if (!empty($_FILES[$form_key]['tmp_name'])) {
-                if (!is_dir($job['dir'])) {
-                    mkdir($job['dir'], 0755, true);
-                }
-
-                $target_path = $job['dir'] . $job['name'];
-                $check = getimagesize($_FILES[$form_key]['tmp_name']);
-                if ($check === false) {
-                    $message .= "<p class='lcars-text-error'>SYS_ERR: INVALID IMAGE ASSET TYPE FOR " . strtoupper($form_key) . ".</p>";
+            if (!empty($_FILES[$form_key]['tmp_name']) && $_FILES[$form_key]['error'] === UPLOAD_ERR_OK) {
+                
+                // 🔒 LAYER 1: Extract and strictly validate file extension
+                $file_ext = strtolower(pathinfo($_FILES[$form_key]['name'], PATHINFO_EXTENSION));
+                $allowed_extensions = ['png', 'jpg', 'jpeg', 'gif'];
+                
+                if (!in_array($file_ext, $allowed_extensions, true)) {
+                    $message = "<p class='lcars-text-error'>SYS_ERR: INVALID FILE EXTENSION REJECTED ON " . strtoupper($form_key) . ".</p>";
                     $upload_ok = false;
                     break;
                 }
 
-                if (!move_uploaded_file($_FILES[$form_key]['tmp_name'], $target_path)) {
-                    $message .= "<p class='lcars-text-error'>SYS_ERR: WRITE EXCEPTION IN DIRECTORY " . $job['dir'] . ".</p>";
+                // 🔒 LAYER 2: Server-Side MIME-Type Verification (Bypasses forged image headers)
+                $finfo = new finfo(FILEINFO_MIME_TYPE);
+                $real_mime = $finfo->file($_FILES[$form_key]['tmp_name']);
+                $allowed_mimes = ['image/png', 'image/jpeg', 'image/gif'];
+                
+                if (!in_array($real_mime, $allowed_mimes, true)) {
+                    $message = "<p class='lcars-text-error'>SYS_ERR: UNRECOGNIZED FILE TYPE SIGNATURE DETECTED FOR " . strtoupper($form_key) . ".</p>";
+                    $upload_ok = false;
+                    break;
+                }
+
+                if (!is_dir($job['dir'])) {
+                    mkdir($job['dir'], 0755, true);
+                }
+
+                // 🔒 LAYER 3: Randomize the filename using high-entropy hashes to prevent PHP payload execution
+                $secure_filename = $job['prefix'] . bin2hex(random_bytes(16)) . '.' . $file_ext;
+                $target_path = $job['dir'] . $secure_filename;
+
+                // Move old file from disk if it's not a generic default system file
+                $old_file = $$job['target_var'];
+                if (file_exists($old_file) && $old_file !== "images/logo.png" && $old_file !== "ProfilePics/default.png") {
+                    @unlink($old_file);
+                }
+
+                if (move_uploaded_file($_FILES[$form_key]['tmp_name'], $target_path)) {
+                    $$job['target_var'] = $target_path;
+                } else {
+                    $message = "<p class='lcars-text-error'>SYS_ERR: WRITE EXCEPTION IN DIRECTORY " . $job['dir'] . ".</p>";
                     $upload_ok = false;
                     break;
                 }
             }
         }
 
-        // Write configuration content down to disk file matrix
+        // Write configuration content securely into data profiles
         if ($upload_ok) {
-            $config_content = "<?php\n";
-            $config_content .= "// Generated Automatically via Master Owner Admin Control Panel\n";
-            $config_content .= "define('GROUP_NAME', '" . addslashes($group_name) . "');\n";
-            $config_content .= "define('GROUP_ABBR', '" . addslashes($group_abbr) . "');\n";
-            $config_content .= "define('GROUP_LOGO', 'images/logo.png');\n";
-            $config_content .= "define('DEFAULT_AVATAR', 'ProfilePics/default.png');\n";
-            $config_content .= "?>";
+            $new_config = [
+                'GROUP_NAME' => $group_name,
+                'GROUP_ABBR' => $group_abbr,
+                'GROUP_LOGO' => $current_group_logo,
+                'DEFAULT_AVATAR' => $current_default_avatar
+            ];
 
-            if (file_put_contents('group_config.php', $config_content)) {
+            // 🔒 SECURITY FIX: Storing parameters strictly as a data tree safely neutralizes RCE risks
+            if (file_put_contents($config_file, json_encode($new_config, JSON_PRETTY_PRINT))) {
                 $message = "<p class='lcars-text-success'>FLEET CORE SYNCHRONIZED: CONFIGURATION VARIABLES UPDATED.</p>";
                 $current_group_name = $group_name;
                 $current_group_abbr = $group_abbr;
@@ -147,6 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             background-color: var(--lcars-bg); color: #ffffff;
             font-family: Arial, sans-serif; margin: 0; padding: 15px;
             text-transform: uppercase; letter-spacing: 1px;
+            overflow-x: hidden;
         }
         .lcars-header { display: flex; align-items: flex-end; margin-bottom: 15px; }
         .lcars-bar-top { background-color: var(--lcars-purple); height: 40px; flex-grow: 1; border-bottom-left-radius: 20px; margin-right: 15px; position: relative; }
@@ -207,12 +245,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                     </div>
 
                     <div class="form-row">
-                        <label for="group_logo">UPDATE FLEET OVERLAY LOGO (SAVES TO IMAGES/LOGO.PNG)</label>
+                        <label for="group_logo">UPDATE FLEET OVERLAY LOGO (SAVES TO IMAGES/)</label>
                         <input type="file" id="group_logo" name="group_logo" class="lcars-file-input" accept="image/*">
                     </div>
 
                     <div class="form-row">
-                        <label for="default_avatar">UPDATE DEFAULT DOSSIER PHOTO (SAVES TO PROFILEPICS/DEFAULT.PNG)</label>
+                        <label for="default_avatar">UPDATE DEFAULT DOSSIER PHOTO (SAVES TO PROFILEPICS/)</label>
                         <input type="file" id="default_avatar" name="default_avatar" class="lcars-file-input" accept="image/*">
                     </div>
 
