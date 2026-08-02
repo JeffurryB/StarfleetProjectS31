@@ -1,10 +1,18 @@
 <?php
+// 🔒 LINE 1: The Global File-Level Execution Shield
+if (defined('FUNCTIONS_LOADED_MATRIX')) {
+    return; // Instantly exits the file and ignores everything below if already loaded once
+}
+define('FUNCTIONS_LOADED_MATRIX', true);
+
+// ==========================================
+// ALL OF YOUR ORIGINAL FUNCTIONS STAY BELOW
+// ==========================================
 
 function GetAssetName( $string )
 {
     return str_replace( "INVENTORY_", "", $string );
 }
-
 
 function Advanced_HTTP_Request( $Host, $PostData = "" )
 {
@@ -87,5 +95,4 @@ function record_security_log($dbConnection, $operator, $actionType, $module, $id
     }
     return false;
 }
-
 ?>
