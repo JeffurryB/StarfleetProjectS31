@@ -3,43 +3,69 @@ header( 'Content-type: text/html; charset=utf-8' );
 include( "config.php" );
 include( "session.php");
 mysqli_set_charset( $db,"utf8" );
-//	ini_set('default_charset', 'UTF-8');
-$uuid = $_GET['uuid'];
 
-$ERROR = "\n\nFailed to update Group Tag.\nContact YOUR RANK HERE, YOUR NAME HERE with the provided Error Message.";
+// 1. Get the parameter safely (fallback to empty string if not set)
+$uuid = $_GET['uuid'] ?? '';
 
+$ERROR = "\n\nFailed to update Group Tag.\nContact Admiral Name with the provided Error Message.";
 
-$Tag = "SELECT IFNULL(a.`DisplayName`, a.`username`) AS `name`, a.`active`, r.`rname`, t.`tag_name`, d.`colorX`, d.`colorY`, d.`ColorZ`, r.`RankLogo` FROM `accounts` a INNER JOIN `divisions` d ON a.`DivID` = d.`did` INNER JOIN `Rank` r ON a.`RankID` = r.`RankID` INNER JOIN `Titles` t ON a.`TitleID` = t.`tid` WHERE `UUID` = '$uuid' LIMIT 1";
+// 2. Use a secure placeholder (?) instead of direct variable insertion
+$Tag = "SELECT IFNULL(a.`DisplayName`, a.`username`) AS `name`, a.`active`, r.`rname`, t.`tag_name`, d.`colorX`, d.`colorY`, d.`ColorZ`, r.`RankLogo` 
+        FROM `accounts` a 
+        INNER JOIN `divisions` d ON a.`DivID` = d.`did` 
+        INNER JOIN `Rank` r ON a.`RankID` = r.`RankID` 
+        INNER JOIN `Titles` t ON a.`TitleID` = t.`tid` 
+        WHERE `UUID` = ? 
+        LIMIT 1";
 
+// 3. Prepare the statement
+$stmt = mysqli_prepare($db, $Tag);
 
-$query = mysqli_query( $db,$Tag );
-$Rows = mysqli_num_rows( $query );
-if ( $Rows == 0 ) // Is there a record already?
-{
-    //No record on file they must be a civilian\observer
-    echo "<255,255,255>:═══════\nCivilian\nRP GROUP";//\nBUG ".$Rows. "\nuuid = ".$uuid;
-    //echo "<255,255,255>:".$Tag;
-}
-elseif ( $Rows == 1 )
-{
-    $list = mysqli_fetch_array( $query );
+if ($stmt) {
+    // 4. Bind the UUID as a string parameter
+    mysqli_stmt_bind_param($stmt, "s", $uuid);
 
-    $name = $list['name'];
-    $rank = $list['rname'];
-    $tag = $list['tag_name'];
-    $colorX = $list['colorX'];
-    $colorY = $list['colorY'];
-    $colorZ = $list['ColorZ'];
-    $logo = $list['RankLogo'];
+    // 5. Execute the query
+    mysqli_stmt_execute($stmt);
 
-    if ( 0 == $list['active'] )
+    // 6. Retrieve the secure result set
+    $query = mysqli_stmt_get_result($stmt);
+    
+    // Get row count from the statement result
+    $Rows = mysqli_num_rows($query);
+
+    if ( $Rows == 0 ) // Is there a record already?
     {
-        echo "<255,255,255>:".$logo."\nCivilian\nRP GROUP";
+        //No record on file they must be a civilian\observer
+        echo "<255,255,255>:═══════\nCivilian\nRPGROUP";
     }
-    else
+    elseif ( $Rows == 1 )
     {
-        echo "<".$colorX.",".$colorY.",".$colorZ.">:".$logo."\n".$rank."\n".$name."\n".$tag."\nUFPGC";
-    }
+        // Use mysqli_fetch_array to maintain compatibility with your original code
+        $list = mysqli_fetch_array( $query );
 
+        $name = $list['name'];
+        $rank = $list['rname'];
+        $tag = $list['tag_name'];
+        $colorX = $list['colorX'];
+        $colorY = $list['colorY'];
+        $colorZ = $list['ColorZ'];
+        $logo = $list['RankLogo'];
+
+        if ( 0 == $list['active'] )
+        {
+            echo "<255,255,255>:".$logo."\nCivilian\nRPGROUP";
+        }
+        else
+        {
+            echo "<".$colorX.",".$colorY.",".$colorZ.">:".$logo."\n".$rank."\n".$name."\n".$tag."\nRPGROUP";
+        }
+    }
+    
+    // Close the statement to clean up resources
+    mysqli_stmt_close($stmt);
+} else {
+    // Fallback error handling if database fails to prepare statement
+    echo "<255,255,255>:" . $ERROR;
 }
 ?>
