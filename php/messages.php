@@ -1,8 +1,11 @@
 <?php
-// 1. INCLUDE EXISTING SESSION AND CONFIGURATION MODULES FIRST
-include("config.php");   // Loads the active $db connection resource
-include("session.php");  // Loads login tracking context and populates $login_session
-include("functions.php");
+// 1. SYSTEM CONTEXT INITIALIZATION
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once("config.php");   
+include_once("session.php");  
+include_once("functions.php"); // 🔒 include_once prevents the "Cannot redeclare" crash
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -106,7 +109,7 @@ $users_res = mysqli_query($db, $users_sql);
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"><title>RP GROUP - Subspace Communications Terminal</title>
+    <meta charset="UTF-8"><title>[<?php echo defined('GROUP_ABBR') ? GROUP_ABBR : 'UFP'; ?>] - Subspace Communications Terminal</title>
     <style>
         :root { --lcars-purple: #9966cc; --lcars-orange: #ff9900; --lcars-pink: #cc6699; --lcars-blue: #33ccff; --lcars-dark-blue: #5588ff; --lcars-bg: #000000; --lcars-green: #33cc66; }
         body { background-color: var(--lcars-bg); color: #ffffff; font-family: "Arial Custom", "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 15px; text-transform: uppercase; letter-spacing: 1px; overflow-x: hidden; }
@@ -176,22 +179,27 @@ $users_res = mysqli_query($db, $users_sql);
 
             <?php if (!empty($status_msg)): ?>
                 <div class="telemetry-banner <?php echo ($status_type === 'success') ? 'telemetry-success' : 'telemetry-failure'; ?>">
-                    COM-LINK STATUS REPORT: <?php echo $status_msg; ?>
+                    COM-LINK STATUS REPORT: <?php echo htmlspecialchars($status_msg); ?>
                 </div>
             <?php endif; ?>
 
             <div class="grid-layout">
                 <section class="lcars-panel panel-blue" style="color: var(--lcars-blue);">
                     <h3>TRANSMIT NEW BURST SIGNAL</h3>
-                    <form method="POST" action="messages.php">
+                    <form method="POST" action="">
+                        <!-- 🔒 CSRF SECURE SHIELD OVERLAY -->
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                         <input type="hidden" name="action" value="send_msg">
+                        
                         <div style="margin-bottom: 15px;">
                             <label style="display:block; font-size:11px; margin-bottom:6px; font-weight:bold;">DESTINATION HANDLER ADDRESS:</label>
                             <select name="to_username" class="lcars-select" required>
                                 <option value="">-- CHOOSE RECIPIENT NODE --</option>
-                                <?php while ($u_row = mysqli_fetch_assoc($users_res)): ?>
-                                    <option value="<?php echo htmlspecialchars($u_row['username']); ?>"><?php echo htmlspecialchars($u_row['username'] . " [" . $u_row['dname'] . "]"); ?></option>
-                                <?php endwhile; ?>
+                                <?php if (!empty($users_res)): ?>
+                                    <?php while ($u_row = mysqli_fetch_assoc($users_res)): ?>
+                                        <option value="<?php echo htmlspecialchars($u_row['username']); ?>"><?php echo htmlspecialchars($u_row['username'] . " [" . $u_row['dname'] . "]"); ?></option>
+                                    <?php endwhile; ?>
+                                <?php endif; ?>
                             </select>
                         </div>
                         <div style="margin-bottom: 20px;">
@@ -201,7 +209,7 @@ $users_res = mysqli_query($db, $users_sql);
                         <button type="submit" class="lcars-btn btn-green" style="width:100%; border-radius:4px; text-align:center;">ENGAGE SIGNAL REPEATER</button>
                     </form>
                 </section>
-
+                
                 <section class="lcars-panel panel-pink" style="color: var(--lcars-pink);" id="stream-container">
                     <div class="tab-btn-row">
                         <button class="tab-btn tab-active" id="btn-inbox" onclick="switchStream('inbox')">INBOX DIRECTS</button>
@@ -209,48 +217,52 @@ $users_res = mysqli_query($db, $users_sql);
                     </div>
 
                     <div id="stream-inbox" class="msg-feed">
-                        <?php if (mysqli_num_rows($inbox_res) == 0): ?>
+                        <?php if (empty($inbox_res) || mysqli_num_rows($inbox_res) == 0): ?>
                             <div class="msg-body" style="font-style: italic; color:#777;">NO INCOMING SIGNALS DETECTED WITHIN SECTOR LOGS.</div>
                         <?php else: ?>
                             <?php while ($msg = mysqli_fetch_assoc($inbox_res)): ?>
-    <div class="msg-node" style="display: flex; flex-direction: column; justify-content: space-between; position: relative;">
-        <div>
-            <div class="msg-meta">
-                <span>FROM: <?php echo htmlspecialchars($msg['from_username']); ?></span>
-                <span><?php echo htmlspecialchars($msg['date_received'] . " // " . $msg['time_received']); ?></span>
-            </div>
-            <div class="msg-body" style="padding-right: 40px;"><?php echo nl2br(htmlspecialchars($msg['message'])); ?></div>
-        </div>
-        <form method="POST" action="messages.php" style="position: absolute; right: 10px; bottom: 8px; margin: 0;" onsubmit="return confirm('PURGE LOG DATA: CONFIRM OVERRIDE SEQUENCE?');">
-            <input type="hidden" name="action" value="delete_msg">
-            <input type="hidden" name="msg_id" value="<?php echo $msg['id']; ?>">
-            <button type="submit" style="background: none; border: none; color: #cc6699; font-family: inherit; font-size: 11px; font-weight: bold; cursor: pointer; text-transform: uppercase; padding: 2px 5px;">[WIPE]</button>
-        </form>
-    </div>
-<?php endwhile; ?>
+                                <div class="msg-node" style="display: flex; flex-direction: column; justify-content: space-between; position: relative;">
+                                    <div>
+                                        <div class="msg-meta">
+                                            <span>FROM: <?php echo htmlspecialchars($msg['from_username']); ?></span>
+                                            <span><?php echo htmlspecialchars($msg['date_received'] . " // " . $msg['time_received']); ?></span>
+                                        </div>
+                                        <div class="msg-body" style="padding-right: 40px;"><?php echo nl2br(htmlspecialchars($msg['message'])); ?></div>
+                                    </div>
+                                    <!-- 🔒 CSRF SECURE BLOCK: Direct contextual action override -->
+                                    <form method="POST" action="" style="position: absolute; right: 10px; bottom: 8px; margin: 0;" onsubmit="return confirm('PURGE LOG DATA: CONFIRM OVERRIDE SEQUENCE?');">
+                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                                        <input type="hidden" name="action" value="delete_msg">
+                                        <input type="hidden" name="msg_id" value="<?php echo (int)$msg['id']; ?>">
+                                        <button type="submit" style="background: none; border: none; color: #cc6699; font-family: inherit; font-size: 11px; font-weight: bold; cursor: pointer; text-transform: uppercase; padding: 2px 5px;">[WIPE]</button>
+                                    </form>
+                                </div>
+                            <?php endwhile; ?>
                         <?php endif; ?>
                     </div>
 
                     <div id="stream-outbox" class="msg-feed" style="display: none;">
-                        <?php if (mysqli_num_rows($outbox_res) == 0): ?>
+                        <?php if (empty($outbox_res) || mysqli_num_rows($outbox_res) == 0): ?>
                             <div class="msg-body" style="font-style: italic; color:#777;">NO RECENT SIGNAL TRANSMISSIONS ORIGINATED FROM THIS NODE.</div>
                         <?php else: ?>
                             <?php while ($msg = mysqli_fetch_assoc($outbox_res)): ?>
-    <div class="msg-node out-node" style="display: flex; flex-direction: column; justify-content: space-between; position: relative;">
-        <div>
-            <div class="msg-meta">
-                <span>TO: <?php echo htmlspecialchars($msg['to_username']); ?></span>
-                <span><?php echo htmlspecialchars($msg['date_received'] . " // " . $msg['time_received']); ?></span>
-            </div>
-            <div class="msg-body" style="padding-right: 40px;"><?php echo nl2br(htmlspecialchars($msg['message'])); ?></div>
-        </div>
-        <form method="POST" action="messages.php" style="position: absolute; right: 10px; bottom: 8px; margin: 0;" onsubmit="return confirm('PURGE LOG DATA: CONFIRM OVERRIDE SEQUENCE?');">
-            <input type="hidden" name="action" value="delete_msg">
-            <input type="hidden" name="msg_id" value="<?php echo $msg['id']; ?>">
-            <button type="submit" style="background: none; border: none; color: var(--lcars-blue, #33ccff); font-family: inherit; font-size: 11px; font-weight: bold; cursor: pointer; text-transform: uppercase; padding: 2px 5px;">[WIPE]</button>
-        </form>
-    </div>
-<?php endwhile; ?>
+                                <div class="msg-node out-node" style="display: flex; flex-direction: column; justify-content: space-between; position: relative;">
+                                    <div>
+                                        <div class="msg-meta">
+                                            <span>TO: <?php echo htmlspecialchars($msg['to_username']); ?></span>
+                                            <span><?php echo htmlspecialchars($msg['date_received'] . " // " . $msg['time_received']); ?></span>
+                                        </div>
+                                        <div class="msg-body" style="padding-right: 40px;"><?php echo nl2br(htmlspecialchars($msg['message'])); ?></div>
+                                    </div>
+                                    <!-- 🔒 CSRF SECURE BLOCK: Outgoing archive action tracking override -->
+                                    <form method="POST" action="" style="position: absolute; right: 10px; bottom: 8px; margin: 0;" onsubmit="return confirm('PURGE LOG DATA: CONFIRM OVERRIDE SEQUENCE?');">
+                                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                                        <input type="hidden" name="action" value="delete_msg">
+                                        <input type="hidden" name="msg_id" value="<?php echo (int)$msg['id']; ?>">
+                                        <button type="submit" style="background: none; border: none; color: var(--lcars-blue, #33ccff); font-family: inherit; font-size: 11px; font-weight: bold; cursor: pointer; text-transform: uppercase; padding: 2px 5px;">[WIPE]</button>
+                                    </form>
+                                </div>
+                            <?php endwhile; ?>
                         <?php endif; ?>
                     </div>
                 </section>
@@ -267,4 +279,9 @@ $users_res = mysqli_query($db, $users_sql);
     </script>
 </body>
 </html>
-<?php @mysqli_close($db); ?>
+<?php 
+// Safely close connection matching the fallback check assignment in Part 1
+if (isset($conn)) {
+    @mysqli_close($conn); 
+}
+?>
