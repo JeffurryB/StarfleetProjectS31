@@ -1,26 +1,41 @@
 <?php
-// 1. INCLUDE EXISTING SESSION AND CONFIG MANAGEMENT
-include("session.php");
-include("config.php"); // 🗄️ Loads your global database configuration connection
+// 1. SYSTEM CONTEXT INITIALIZATION
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once("session.php");
+include_once("config.php"); // 🗄️ Loads your global database configuration connection
 
 // Ensure the local file script maps cleanly to your config's database variable
 if (isset($db) && !isset($conn)) {
     $conn = $db;
 }
 
-if (isset($_GET['ack']) && $_GET['ack'] == '1') {
-    $_SESSION['security_acknowledged'] = true;
+// Assumes session.php populates $_SESSION['username'] or $login_session. 
+if (!isset($login_session)) {
+    header("Location: notauthorized.php");
+    exit;
+}
+
+// 🔒 CSRF INITIALIZATION MATRIX: Seed authorization verification tracking parameters
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// 🛡️ SECURITY REMEDIATION: Converted the state change from GET to POST with CSRF verification
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['action']) && $_POST['action'] === 'acknowledge_security') {
+    if (isset($_POST['csrf_token']) && hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        $_SESSION['security_acknowledged'] = true;
+    } else {
+        header("HTTP/1.1 403 Forbidden");
+        die("CRITICAL SECURITY ERROR: CSRF MATRIX MALFUNCTION. STATE PERSISTENCE TERMINATED.");
+    }
 }
 
 // Check if they have already cleared it earlier in this session
 $show_security_modal = true;
 if (isset($_SESSION['security_acknowledged']) && $_SESSION['security_acknowledged'] === true) {
     $show_security_modal = false;
-}
-// Assumes session.php populates $_SESSION['username'] or $login_session. 
-if (!isset($login_session)) {
-    header("Location: notauthorized.php");
-    exit;
 }
 
 // 2. SECURE AUTHORIZATION CHECK
@@ -88,25 +103,57 @@ if ($selected_id > 0) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>RPGROUP - Admin Terminal</title><style>:root{--lcars-purple:#9966cc;--lcars-orange:#ff9900;--lcars-pink:#cc6699;--lcars-blue:#33ccff;--lcars-dark-blue:#5588ff;--lcars-bg:#000000}body{background-color:var(--lcars-bg);color:#fff;font-family:"Arial Custom","Helvetica Neue",Arial,sans-serif;margin:0;padding:15px;text-transform:uppercase;letter-spacing:1px;overflow-x:hidden}.lcars-header{display:flex;align-items:flex-end;margin-bottom:15px}.lcars-bar-top{background-color:var(--lcars-purple);height:40px;flex-grow:1;border-bottom-left-radius:20px;margin-right:15px;position:relative}.lcars-bar-top::before{content:"SD-2026";position:absolute;left:25px;bottom:3px;color:#000;font-weight:bold;font-size:14px}.lcars-title{color:var(--lcars-orange);font-size:28px;font-weight:300;margin:0;line-height:1;white-space:nowrap}.lcars-container{display:flex;min-height:calc(100vh - 120px)}.lcars-left-bracket{width:150px;display:flex;flex-direction:column;margin-right:20px}.lcars-elbow{background-color:var(--lcars-purple);height:60px;border-top-left-radius:20px;border-bottom-left-radius:20px;margin-bottom:15px;position:relative}.lcars-elbow::after{content:"";position:absolute;background-color:var(--lcars-bg);width:110px;height:35px;bottom:0;right:0;border-top-left-radius:15px}.lcars-menu{display:flex;flex-direction:column;gap:8px}.lcars-btn{background-color:var(--lcars-orange);color:#000;padding:10px 15px;text-decoration:none;font-weight:bold;font-size:13px;text-align:right;border-radius:5px 0 0 5px;transition:background .2s;border:none;cursor:pointer;font-family:inherit;letter-spacing:inherit}.lcars-btn:hover{background-color:#fcc}.btn-blue{background-color:var(--lcars-blue)}.btn-blue:hover{background-color:#88e2ff}.btn-pink{background-color:var(--lcars-pink)}.btn-pink:hover{background-color:#ff99cc}.btn-logout{background-color:#c33;color:#fff;margin-top:20px}.btn-logout:hover{background-color:#f55}.lcars-main-panel{flex-grow:1;display:flex;flex-direction:column}.lcars-user-banner{border-bottom:4px solid var(--lcars-blue);padding-bottom:10px;margin-bottom:25px;display:flex;justify-content:space-between;align-items:center}.lcars-user-banner h1{margin:0;font-size:22px;color:var(--lcars-blue);font-weight:normal}.system-status{font-size:12px;color:var(--lcars-dark-blue)}.lcars-admin-section{background-color:#111116;border-left:6px solid var(--lcars-purple);padding:20px;border-radius:0 8px 8px 0;margin-bottom:25px}.lcars-admin-section h3{margin:0 0 15px 0;color:var(--lcars-purple);font-size:18px}.form-row{display:flex;flex-direction:column;margin-bottom:15px}.form-row label{color:var(--lcars-blue);font-size:12px;margin-bottom:5px;font-weight:bold}.lcars-input,.lcars-select{background-color:#000;border:2px solid var(--lcars-dark-blue);color:#fff;padding:10px;font-size:14px;border-radius:4px;font-family:inherit;letter-spacing:1px;text-transform:uppercase;width:100%;box-sizing:border-box}.lcars-input:focus,.lcars-select:focus{outline:none;border-color:var(--lcars-blue)}.lcars-select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://w3.org' width='100' height='50'><polygon points='0,0 100,0 50,50' style='fill:%2333ccff;'/></svg>");background-repeat:no-repeat;background-size:12px 6px;background-position:right 15px center;padding-right:30px}.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}.form-actions{display:flex;gap:15px;margin-top:10px}.form-actions .lcars-btn{border-radius:4px;text-align:center;min-width:120px}.field-tip{font-size:11px;color:#aaa;text-transform:none;margin-top:5px}
-    .lcars-modal-overlay{display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
-.lcars-modal-box{background:#050505;border:4px solid #cc3333;border-radius:15px;max-width:550px;width:100%;padding:25px;box-sizing:border-box;box-shadow:0 0 25px rgba(204,51,51,0.4)}
-.lcars-modal-header{color:#cc3333;font-size:24px;font-weight:bold;border-bottom:3px solid #cc3333;padding-bottom:5px;margin-bottom:15px;display:flex;justify-content:space-between}
-.lcars-modal-body{color:#ddd;font-size:16px;line-height:1.4;text-transform:none;margin-bottom:20px}
-.lcars-modal-body strong{color:#ff9900;text-transform:uppercase}
-.lcars-warn-text{color:#cc3333;font-weight:bold;text-transform:uppercase;margin-top:15px;font-size:15px;letter-spacing:1px}
-.lcars-modal-actions{display:flex;justify-content:flex-end}
-</style></head>
-
+    <title>RPGROUP - Admin Terminal</title>
+    <style>
+        :root{--lcars-purple:#9966cc;--lcars-orange:#ff9900;--lcars-pink:#cc6699;--lcars-blue:#33ccff;--lcars-dark-blue:#5588ff;--lcars-bg:#000000}
+        body{background-color:var(--lcars-bg);color:#fff;font-family:"Arial Custom","Helvetica Neue",Arial,sans-serif;margin:0;padding:15px;text-transform:uppercase;letter-spacing:1px;overflow-x:hidden}
+        .lcars-header{display:flex;align-items:flex-end;margin-bottom:15px}
+        .lcars-bar-top{background-color:var(--lcars-purple);height:40px;flex-grow:1;border-bottom-left-radius:20px;margin-right:15px;position:relative}
+        .lcars-bar-top::before{content:"SD-2026";position:absolute;left:25px;bottom:3px;color:#000;font-weight:bold;font-size:14px}
+        .lcars-title{color:var(--lcars-orange);font-size:28px;font-weight:300;margin:0;line-height:1;white-space:nowrap}
+        .lcars-container{display:flex;min-height:calc(100vh - 120px)}
+        .lcars-left-bracket{width:150px;display:flex;flex-direction:column;margin-right:20px}
+        .lcars-elbow{background-color:var(--lcars-purple);height:60px;border-top-left-radius:20px;border-bottom-left-radius:20px;margin-bottom:15px;position:relative}
+        .lcars-elbow::after{content:"";position:absolute;background-color:var(--lcars-bg);width:110px;height:35px;bottom:0;right:0;border-top-left-radius:15px}
+        .lcars-menu{display:flex;flex-direction:column;gap:8px}
+        .lcars-btn{background-color:var(--lcars-orange);color:#000;padding:10px 15px;text-decoration:none;font-weight:bold;font-size:13px;text-align:right;border-radius:5px 0 0 5px;transition:background .2s;border:none;cursor:pointer;font-family:inherit;letter-spacing:inherit}
+        .lcars-btn:hover{background-color:#fcc}
+        .btn-blue{background-color:var(--lcars-blue)}
+        .btn-blue:hover{background-color:#88e2ff}
+        .btn-pink{background-color:var(--lcars-pink)}
+        .btn-pink:hover{background-color:#ff99cc}
+        .btn-logout{background-color:#c33;color:#fff;margin-top:20px}
+        .btn-logout:hover{background-color:#f55}
+        .lcars-main-panel{flex-grow:1;display:flex;flex-direction:column}
+        .lcars-user-banner{border-bottom:4px solid var(--lcars-blue);padding-bottom:10px;margin-bottom:25px;display:flex;justify-content:space-between;align-items:center}
+        .lcars-user-banner h1{margin:0;font-size:22px;color:var(--lcars-blue);font-weight:normal}
+        .system-status{font-size:12px;color:var(--lcars-dark-blue)}
+        .lcars-admin-section{background-color:#111116;border-left:6px solid var(--lcars-purple);padding:20px;border-radius:0 8px 8px 0;margin-bottom:25px}
+        .lcars-admin-section h3{margin:0 0 15px 0;color:var(--lcars-purple);font-size:18px}
+        .form-row{display:flex;flex-direction:column;margin-bottom:15px}
+        .form-row label{color:var(--lcars-blue);font-size:12px;margin-bottom:5px;font-weight:bold}
+        .lcars-input,.lcars-select{background-color:#000;border:2px solid var(--lcars-dark-blue);color:#fff;padding:10px;font-size:14px;border-radius:4px;font-family:inherit;letter-spacing:1px;text-transform:uppercase;width:100%;box-sizing:border-box}
+        .lcars-input:focus,.lcars-select:focus{outline:none;border-color:var(--lcars-blue)}
+        .lcars-select{appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://w3.org' width='100' height='50'><polygon points='0,0 100,0 50,50' style='fill:%2333ccff;'/></svg>");background-repeat:no-repeat;background-size:12px 6px;background-position:right 15px center;padding-right:30px}
+        .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px}
+        .form-actions{display:flex;gap:15px;margin-top:10px}
+        .form-actions .lcars-btn{border-radius:4px;text-align:center;min-width:120px}
+        .field-tip{font-size:11px;color:#aaa;text-transform:none;margin-top:5px}
+        .lcars-modal-overlay{display:flex;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
+        .lcars-modal-box{background:#050505;border:4px solid #cc3333;border-radius:15px;max-width:550px;width:100%;padding:25px;box-sizing:border-box;box-shadow:0 0 25px rgba(204,51,51,0.4)}
+        .lcars-modal-header{color:#cc3333;font-size:24px;font-weight:bold;border-bottom:3px solid #cc3333;padding-bottom:5px;margin-bottom:15px;display:flex;justify-content:space-between}
+        .lcars-modal-body{color:#ddd;font-size:16px;line-height:1.4;text-transform:none;margin-bottom:20px}
+        .lcars-modal-body strong{color:#ff9900;text-transform:uppercase}
+        .lcars-warn-text{color:#cc3333;font-weight:bold;text-transform:uppercase;margin-top:15px;font-size:15px;letter-spacing:1px}
+        .lcars-modal-actions{display:flex;justify-content:flex-end}
+    </style>
+</head>
 <body>
-
     <header class="lcars-header">
         <div class="lcars-bar-top"></div>
         <h2 class="lcars-title">STARFLEET COMPUTER TERMINAL</h2>
     </header>
-
     <div class="lcars-container">
-        
         <nav class="lcars-left-bracket">
             <div class="lcars-elbow"></div>
             <div class="lcars-menu">
@@ -116,7 +163,6 @@ if ($selected_id > 0) {
                 <a href="logout.php" class="lcars-btn btn-logout">DISENGAGE</a>
             </div>
         </nav>
-
         <main class="lcars-main-panel">
             <div class="lcars-user-banner">
                 <?php if (isset($_GET['status']) && $_GET['status'] == 'synchronized'): ?>
@@ -131,7 +177,6 @@ if ($selected_id > 0) {
                 <h1>OVERRIDE: MEMBER REGISTRY MANAGEMENT</h1>
                 <div class="system-status">SYS STATUS: OVERRIDE // AUTH_LEVEL: ADMIN_01</div>
             </div>
-
             <!-- Member Selection Sub-Array -->
             <section class="lcars-admin-section">
                 <h3>SELECT PERSONNEL RECORD</h3>
@@ -142,8 +187,8 @@ if ($selected_id > 0) {
                             <select name="member_id" id="member_select" class="lcars-select" onchange="document.getElementById('lcars_selector_form').submit();">
                                 <option value="">-- SELECT PERSONNEL ID / NAME --</option>
                                 <?php foreach ($all_members as $member): ?>
-                                    <option value="<?php echo $member['ID']; ?>" <?php if ($selected_id == $member['ID']) echo 'selected'; ?>>
-                                        ID: <?php echo $member['ID']; ?> // <?php echo htmlspecialchars($member['DisplayName'] ?: $member['username']); ?>
+                                    <option value="<?php echo (int)$member['ID']; ?>" <?php if ($selected_id == $member['ID']) echo 'selected'; ?>>
+                                        ID: <?php echo (int)$member['ID']; ?> // <?php echo htmlspecialchars($member['DisplayName'] ?: $member['username']); ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -152,11 +197,15 @@ if ($selected_id > 0) {
                     </div>
                 </form>
             </section>
+            
             <?php if ($selected_id > 0 && !empty($member_data)): ?>
                 <section class="lcars-admin-section" style="border-left-color: var(--lcars-blue); margin-top: 25px;">
                     <h3 style="color: var(--lcars-blue);">EDIT SERVICE JACKET METADATA</h3>
                     <form method="POST" action="process_member_edit.php">
-                        <input type="hidden" name="target_member_id" value="<?php echo htmlspecialchars($selected_id); ?>">
+                        <!-- 🔒 CSRF SHIELD ACTIVE VALUE PAYLOAD OVERLAY -->
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                        <input type="hidden" name="target_member_id" value="<?php echo (int)$selected_id; ?>">
+                        
                         <div class="form-grid">
                             <div class="form-row"><label for="input_display_name">DISPLAY NAME</label><input type="text" id="input_display_name" name="DisplayName" class="lcars-input" value="<?php echo htmlspecialchars($member_data['DisplayName'] ?? ''); ?>" placeholder="SURNAME, FIRSTNAME"></div>
                             <div class="form-row"><label for="input_username">USERNAME</label><input type="text" id="input_username" name="username" class="lcars-input" value="<?php echo htmlspecialchars($member_data['username'] ?? ''); ?>" placeholder="SYS_LOGON_ID"></div>
@@ -173,8 +222,8 @@ if ($selected_id > 0) {
                             <div class="form-row"><label for="input_dh">DIVISION HEAD (ADMIN)</label><select id="input_dh" name="dh" class="lcars-select"><option value="1" <?php if (($member_data['dh'] ?? '') == '1') echo 'selected'; ?>>1 - DH YES</option><option value="0" <?php if (($member_data['dh'] ?? '') == '0') echo 'selected'; ?>>0 - DH NO</option></select></div>
                         </div>
                         <div class="form-row" style="margin-top: 15px;"><label for="input_bio">BIOGRAPHICAL SERVICE MEMORY NOTES</label><input type="text" id="input_bio" name="bio" class="lcars-input" value="<?php echo htmlspecialchars($member_data['bio'] ?? ''); ?>" placeholder="ADD LOG ENTRY ANNOTATIONS"></div>
-
                         <h3 style="color: var(--lcars-blue); margin-top: 35px; border-top: 2px solid var(--lcars-blue); padding-top: 20px;">BIOMETRIC & PERSONAL SPECIFICATIONS</h3>
+                        
                         <div class="form-grid">
                             <div class="form-row"><label for="input_languages">SPOKEN / WRITTEN LANGUAGES</label><input type="text" id="input_languages" name="languages" class="lcars-input" value="<?php echo htmlspecialchars($sj_data['languages'] ?? ''); ?>" placeholder="FEDERATION STANDARD, VULCAN, KLINGON"></div>
                             <div class="form-row"><label for="input_religion">RELIGION / PHILOSOPHY</label><input type="text" id="input_religion" name="religion" class="lcars-input" value="<?php echo htmlspecialchars($sj_data['religion'] ?? ''); ?>" placeholder="IDIC / SPIRITUAL PATH"></div>
@@ -195,9 +244,9 @@ if ($selected_id > 0) {
                         <div class="form-row" style="margin-top: 15px;"><label for="input_medical">MEDICAL RESTRICTIONS / BIO-FILTERS PROTOCOLS</label><input type="text" id="input_medical" name="medical_restrictions" class="lcars-input" value="<?php echo htmlspecialchars($sj_data['medical_restrictions'] ?? ''); ?>" placeholder="ALLERGIES, PHOBIAS, CHRONIC CONDITIONS"></div>
                         <div class="form-row" style="margin-top: 15px;"><label for="input_other">OTHER SUB-SYSTEM SPECIFIC DATA</label><input type="text" id="input_other" name="other_info" class="lcars-input" value="<?php echo htmlspecialchars($sj_data['other_info'] ?? ''); ?>" placeholder="MISCELLANEOUS ARCHIVE LOGS"></div>
 
-                             <div class="form-actions" style="margin-top: 20px;">
+                        <div class="form-actions" style="margin-top: 20px;">
                             <button type="submit" class="lcars-btn">SAVE CHANGES</button>
-                            <a href="dhsystem.php?member_id=<?php echo htmlspecialchars($selected_id); ?>" class="lcars-btn btn-pink" style="text-decoration:none;">RESET FORM</a>
+                            <a href="dhsystem.php?member_id=<?php echo (int)$selected_id; ?>" class="lcars-btn btn-pink" style="text-decoration:none;">RESET FORM</a>
                             <a href="dhsystem.php" class="lcars-btn btn-blue" style="text-decoration:none;">ABORT</a>
                         </div>
                     </form>
@@ -205,36 +254,33 @@ if ($selected_id > 0) {
             <?php endif; ?>
         </main>
     </div>
-    <!-- SYSTEM AUDIT MODAL OVERLAY -->
+    
     <?php if ($show_security_modal): ?>
-<div id="security_warning_modal" class="lcars-modal-overlay">
-    <div class="lcars-modal-box">
-        <div class="lcars-modal-header">
-            <span>[!] SECURITY AUDIT ALERT</span>
-            <span style="color:#ff9900;">SYS_WARN_77</span>
+        <div id="security_warning_modal" class="lcars-modal-overlay">
+            <div class="lcars-modal-box">
+                <div class="lcars-modal-header">
+                    <span>[!] SECURITY AUDIT ALERT</span>
+                    <span style="color:#ff9900;">SYS_WARN_77</span>
+                </div>
+                <div class="lcars-modal-body">
+                    YOU ARE ACCESSING A SECURE REGISTRY DIRECTORY. Under Fleet Security Protocol 101, <strong>ALL DATA CHANGES ARE LOGGED IN THE SECURITY SYSTEM</strong>.
+                    <br><br>
+                    <span style="color:#5599cc; font-weight:bold;">TELEMETRY TRACKING PROTOCOL ACTIVE:</span>
+                    <ul style="margin:8px 0; padding-left:20px; color:#aaa;">
+                        <li>OPERATOR BINDING ID: <strong><?php echo htmlspecialchars($login_session); ?></strong></li>
+                        <li>ACTION ARCHIVE: <strong>LOGGING ALL RECORD MODIFICATIONS & MODIFIER IDENTITY</strong></li>
+                    </ul>
+                    <div class="lcars-warn-text">CRITICAL NOTICE: DO NOT ABUSE THIS SYSTEM. ALL UNAUTHORIZED MUTATIONS WILL TRIGGER LOGON SUSPENSION PROTOCOLS.</div>
+                </div>
+                <div class="lcars-modal-actions">
+                    <form method="POST" action="">
+                        <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+                        <input type="hidden" name="action" value="acknowledge_security">
+                        <button type="submit" class="lcars-btn" style="background:#ff9900; color:#000; border-radius:4px; font-weight:bold; padding:10px 20px; cursor:pointer; border:none; text-transform:uppercase; font-family:inherit; letter-spacing:1px;">ACKNOWLEDGE</button>
+                    </form>
+                </div>
+            </div>
         </div>
-        <div class="lcars-modal-body">
-            YOU ARE ACCESSING A SECURE REGISTRY DIRECTORY. Under Fleet Security Protocol 101, <strong>ALL DATA CHANGES ARE LOGGED IN THE SECURITY SYSTEM</strong>.
-            <br><br>
-            <span style="color:#5599cc; font-weight:bold;">TELEMETRY TRACKING PROTOCOL ACTIVE:</span>
-            <ul style="margin:8px 0; padding-left:20px; color:#aaa;">
-                <li>OPERATOR BINDING ID: <strong><?php echo htmlspecialchars($login_session); ?></strong></li>
-                <li>ACTION ARCHIVE: <strong>LOGGING ALL RECORD MODIFICATIONS & MODIFIER IDENTITY</strong></li>
-            </ul>
-            <div class="lcars-warn-text">CRITICAL NOTICE: DO NOT ABUSE THIS SYSTEM. ALL UNAUTHORIZED MUTATIONS WILL TRIGGER LOGON SUSPENSION PROTOCOLS.</div>
-        </div>
-        <div class="lcars-modal-actions">
-            <button type="button" class="lcars-btn" style="background:#ff9900; color:#000; border-radius:4px; font-weight:bold; padding:10px 20px; cursor:pointer;" onclick="dismissSecurityModal()">ACKNOWLEDGE</button>
-        </div>
-    </div>
-</div>
     <?php endif; ?>
 </body>
-    <script>
-function dismissSecurityModal() {
-    // Reload the page with the acknowledgment token to lock it into the session
-    window.location.href = window.location.pathname + '?ack=1';
-}
-</script>
-</script>
 </html>
