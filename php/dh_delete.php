@@ -65,7 +65,186 @@ if ($count_res) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>RP GROUP - Emergency Archive Depletion Terminal</title>
+    <title>RPGROUP - Emergency Archive Depletion Terminal</title>
+    <style>
+        :root { --lcars-red: #cc3333; --lcars-dark-red: #551111; --lcars-orange: #ff9900; --lcars-pink: #cc6699; --lcars-blue: #33ccff; --lcars-bg: #000000; }
+        body { background-color: var(--lcars-bg); color: #ffffff; font-family: "Arial Custom", "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 15px; text-transform: uppercase; letter-spacing: 1px; overflow-x: hidden; }
+        
+        /* FLASHING RED ALERT CORE INTERFACE SPECIFICATION */
+        @keyframes redAlertPulse {
+            0% { background-color: var(--lcars-red); box-shadow: 0 0 10px var(--lcars-red); }
+            50% { background-color: var(--lcars-dark-red); box-shadow: none; }
+            100% { background-color: var(--lcars-red); box-shadow: 0 0 10px var(--lcars-red); }
+        }
+        @keyframes textWarningFlash {
+            0% { color: #ffffff; opacity: 1; }
+            50% { color: #ff5555; opacity: 0.3; }
+            100% { color: #ffffff; opacity: 1; }
+        }
+
+        .lcars-header { display: flex; align-items: flex-end; margin-bottom: 15px; }
+        .lcars-bar-top { animation: redAlertPulse 1.5s infinite ease-in-out; height: 40px; flex-grow: 1; border-bottom-left-radius: 20px; margin-right: 15px; position: relative; }
+        .lcars-bar-top::before { content: "SYS-PURGE-911"; position: absolute; left: 25px; bottom: 3px; color: #000000; font-weight: bold; font-size: 14px; }
+        .lcars-title { animation: textWarningFlash 1.5s infinite ease-in-out; font-size: 28px; font-weight: bold; margin: 0; line-height: 1; white-space: nowrap; }
+        
+        .lcars-container { display: flex; min-height: calc(100vh - 120px); }
+        .lcars-left-bracket { width: 150px; display: flex; flex-direction: column; margin-right: 20px; }
+        .lcars-elbow { animation: redAlertPulse 1.5s infinite ease-in-out; height: 60px; border-top-left-radius: 20px; border-bottom-left-radius: 20px; margin-bottom: 15px; position: relative; }
+        .lcars-elbow::after { content: ""; position: absolute; background-color: var(--lcars-bg); width: 110px; height: 35px; bottom: 0; right: 0; border-top-left-radius: 15px; }
+        
+        .lcars-menu { display: flex; flex-direction: column; gap: 8px; }
+        .lcars-btn { background-color: var(--lcars-orange); color: #000000; padding: 10px 15px; text-decoration: none; font-weight: bold; font-size: 13px; text-align: right; border-radius: 5px 0 0 5px; border: none; cursor: pointer; text-transform: uppercase; }
+        .lcars-btn:hover { background-color: #ffcc00; }
+        .btn-blue { background-color: var(--lcars-blue); } .btn-blue:hover { background-color: #88e2ff; }
+        .btn-alert { background-color: var(--lcars-red); color: #ffffff; } .btn-alert:hover { background-color: #ff5555; }
+        
+        .lcars-main-panel { flex-grow: 1; display: flex; flex-direction: column; }
+        .lcars-user-banner { border-bottom: 4px solid var(--lcars-red); padding-bottom: 10px; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; }
+        .lcars-user-banner h1 { margin: 0; font-size: 22px; color: var(--lcars-red); font-weight: normal; }
+        .system-status { font-size: 12px; color: var(--lcars-red); font-weight: bold; }
+        
+        .lcars-critical-panel { background-color: #1a0505; border: 2px solid var(--lcars-red); border-left-width: 8px; padding: 25px; border-radius: 0 8px 8px 0; margin-bottom: 25px; box-shadow: inset 0 0 15px rgba(204,51,51,0.15); }
+        .lcars-critical-panel h3 { margin: 0 0 15px 0; font-size: 20px; color: #ff5555; letter-spacing: 2px; }
+        .lcars-critical-panel p { font-size: 13px; line-height: 1.6; color: #ffcccc; text-transform: none; margin: 0 0 20px 0; }
+        
+        .telemetry-row { display: flex; gap: 20px; margin-bottom: 25px; }
+        .telemetry-node { background: #000; border: 1px solid var(--lcars-red); padding: 15px; border-radius: 4px; flex-grow: 1; text-align: center; }
+        .telemetry-label { color: var(--lcars-blue); font-size: 11px; margin-bottom: 5px; }
+        .telemetry-value { font-size: 24px; font-weight: bold; color: #ffffff; font-family: monospace; }
+        
+        .lcars-input { background-color: #000000; border: 2px solid var(--lcars-red); color: #ffffff; padding: 12px; font-size: 14px; border-radius: 4px; font-family: inherit; width: 100%; box-sizing: border-box; text-transform: none; margin-bottom: 20px; text-align: center; font-weight: bold; letter-spacing: 2px; }
+        .lcars-input:focus { outline: none; border-color: var(--lcars-orange); }
+        
+        .telemetry-banner { padding: 15px; font-weight: bold; font-size: 13px; margin-bottom: 25px; border-radius: 4px; border-left: 6px solid; text-transform: none; }
+        .telemetry-success { background-color: #112211; color: #55ff55; border-left-color: var(--lcars-orange); }
+        .telemetry-failure { background-color: #331111; color: #ff5555; border-left-color: var(--lcars-red); }
+    </style>
+</head>
+<body>
+
+    <header class="lcars-header">
+        <div class="lcars-bar-top"></div>
+        <h2 class="lcars-title">⚠️ SYSTEM REPOSITORY PURGE WARNING ⚠️</h2>
+    </header>
+
+    <div class="lcars-container">
+        <nav class="lcars-left-bracket">
+            <div class="lcars-elbow"></div>
+            <div class="lcars-menu">
+                <a href="dhpanel.php" class="lcars-btn">DH PANEL</a>
+                <a href="welcome.php" class="lcars-btn btn-blue">MAIN TERM</a>
+                <a href="dh_delete.php" class="lcars-btn btn-alert">WIPE MATRIX</a>
+            </div>
+        </nav>
+
+        <main class="lcars-main-panel">
+            <div class="lcars-user-banner">
+                <?php
+// 1. SYSTEM CONTEXT INITIALIZATION
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include("config.php");   
+include("session.php");  
+include("functions.php");
+
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Ensure file queries link seamlessly with your config's connection variable
+if (isset($db) && !isset($conn)) {
+    $conn = $db;
+}
+
+mysqli_set_charset($conn, "utf8");
+
+// Barrier 1: Authenticated session check
+if (!isset($login_session)) {
+    header("Location: index.php");
+    exit();
+}
+
+// 🔒 CSRF TOKEN INITIALIZATION CHECK: Backup array if session.php hasn't set one yet
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// 2. ENFORCE STRICT LEVEL 9 ADMINISTRATIVE PRIVILEGES (PREPARED MATRIX FIX)
+$auth_username = $login_session;
+$sql_auth = "SELECT dh FROM accounts WHERE username = ? LIMIT 1";
+
+if ($stmt_auth = $conn->prepare($sql_auth)) {
+    $stmt_auth->bind_param("s", $auth_username);
+    $stmt_auth->execute();
+    $res_auth = $stmt_auth->get_result();
+    
+    if ($res_auth && $res_auth->num_rows == 1) {
+        $auth_data = $res_auth->fetch_assoc();
+        if ((int)$auth_data['dh'] !== 1) {
+            header("Location: notauthorized.php?error=clearance_insufficient");
+            exit();
+        }
+    } else {
+        header("Location: index.php");
+        exit();
+    }
+    $stmt_auth->close();
+} else {
+    die("Database access handshake failure inside validation protocols.");
+}
+
+$status_msg = "";
+$status_type = "";
+
+// 3. EXECUTE EMERGENCY SYSTEM-WIDE REPOSITORY TRUNCATION
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['action']) && $_POST['action'] === 'purge_all_transmissions') {
+    
+    // 🔒 CSRF DEFENSE ARRAY FIREWALL: Drop cross-site automated forge attempts
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        header("HTTP/1.1 403 Forbidden");
+        die("CRITICAL SECURITY ERROR: CSRF MATRIX MALFUNCTION. RE-COMPILATION ABORTED.");
+    }
+
+    $auth_confirmation = trim($_POST['auth_confirmation']);
+    
+    // Safety check matching their active logged-in administrative user handle
+    if ($auth_confirmation !== $login_session) {
+        $status_msg = "CRITICAL EXCEPTION: ADMINISTRATIVE SIGNATURE MISMATCH // PURGE SEQUENCE REJECTED.";
+        $status_type = "failure";
+    } else {
+        // TRUNCATE instantly drops all table contents and resets the auto-increment keys to 0
+        $purge_sql = "TRUNCATE TABLE `messages`";
+        
+        if (mysqli_query($conn, $purge_sql)) {
+            $status_msg = "SUCCESS | SYSTEM-WIDE MESSAGE ARCHIVE HAS BEEN FULLY PURGED TO BASE SECTORS.";
+            $status_type = "success";
+            
+            // Fire defensive tracking metrics to recording array
+            $log_telemetry = "Executed irreversible emergency TRUNCATE wipeout on central messages array.";
+            record_security_log($conn, $login_session, 'DELETE', 'SYSTEM_MAINTENANCE', 'MESSAGES_WIPE', $log_telemetry);
+        } else {
+            $status_msg = "CRITICAL EXCEPTION: HARDWARE INTERFACE FAULT // PURGE SEQUENCE TIMED OUT.";
+            $status_type = "failure";
+        }
+    }
+}
+
+// 4. METRIC TELEMETRY LOOKUP: CALCULATE THE SIZE OF CURRENT OVERLOAD
+$count_sql = "SELECT COUNT(*) as current_total FROM `messages`";
+$count_res = mysqli_query($conn, $count_sql);
+$total_rows = 0;
+
+if ($count_res) {
+    $count_row = mysqli_fetch_assoc($count_res);
+    $total_rows = (int)$count_row['current_total'];
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>RPGROUP - Emergency Archive Depletion Terminal</title>
     <style>
         :root { --lcars-red: #cc3333; --lcars-dark-red: #551111; --lcars-orange: #ff9900; --lcars-pink: #cc6699; --lcars-blue: #33ccff; --lcars-bg: #000000; }
         body { background-color: var(--lcars-bg); color: #ffffff; font-family: "Arial Custom", "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 15px; text-transform: uppercase; letter-spacing: 1px; overflow-x: hidden; }
@@ -145,7 +324,7 @@ if ($count_res) {
 
             <?php if (!empty($status_msg)): ?>
                 <div class="telemetry-banner <?php echo ($status_type === 'success') ? 'telemetry-success' : 'telemetry-failure'; ?>">
-                    EMERGENCY RECOVERY RESPONSE MATRIX: <?php echo $status_msg; ?>
+                    EMERGENCY RECOVERY RESPONSE MATRIX: <?php echo htmlspecialchars($status_msg); ?>
                 </div>
             <?php endif; ?>
 
@@ -170,7 +349,10 @@ if ($count_res) {
                 </p>
 
                 <!-- Double Validation Security Check Configuration Form -->
-                <form method="POST" action="dh_delete_messages.php" onsubmit="return confirm('CRITICAL CONFIRMATION OVERRIDE REQUIRED:\n\nARE YOU COMPLETELY CERTAIN YOU WANT TO PERMANENTLY ERASE ALL MESSAGES ON THE ENTIRE SERVER?\n\nTHIS ACTION CANNOT BE UNDONE.');">
+                <!-- 🔒 SECURITY FIX: Setting action="" forces submission back into its own validated context instead of dh_delete_messages.php -->
+                <form method="POST" action="" onsubmit="return confirm('CRITICAL CONFIRMATION OVERRIDE REQUIRED:\n\nARE YOU COMPLETELY CERTAIN YOU WANT TO PERMANENTLY ERASE ALL MESSAGES ON THE ENTIRE SERVER?\n\nTHIS ACTION CANNOT BE UNDONE.');">
+                    <!-- 🔒 CSRF VALIDATION ASSIGNMENT FIELD -->
+                    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
                     <input type="hidden" name="action" value="purge_all_transmissions">
                     
                     <div style="text-align: center;">
