@@ -18,107 +18,34 @@ $text_files = glob($course_directory . "*.txt");
     <meta charset="UTF-8">
     <title>LCARS Academy Course Viewer</title>
     <style>
-        :root {
-            --lcars-purple: #9966cc;
-            --lcars-orange: #ff9900;
-            --lcars-pink: #cc6699;
-            --lcars-blue: #33ccff;
-            --lcars-bg: #000000;
-            --lcars-green: #33cc33;
-        }
+    :root { --lc-p: #96c; --lc-o: #f90; --lc-pk: #c69; --lc-b: #3cf; --lc-bg: #000; --lc-g: #33cc33; }
+    body { background: var(--lc-bg); color: #fff; font-family: Arial, sans-serif; margin: 0; padding: 15px; text-transform: uppercase; letter-spacing: 1px; }
+    
+    .lcars-header { display: flex; align-items: flex-end; margin-bottom: 15px; }
+    .lcars-bar-top { background: var(--lc-b); height: 40px; flex-grow: 1; border-bottom-left-radius: 20px; margin-right: 15px; position: relative; }
+    .lcars-bar-top::before { content: "SYS-LEARN-102"; position: absolute; left: 25px; bottom: 3px; color: #000; font-weight: bold; font-size: 14px; }
+    .lcars-title { color: var(--lc-b); font-size: 28px; font-weight: 300; margin: 0; white-space: nowrap; }
 
-        body {
-            background-color: var(--lcars-bg);
-            color: #ffffff;
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 15px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
+    .lcars-container { display: flex; min-height: 80vh; }
+    .lcars-left-bracket { width: 150px; display: flex; flex-direction: column; margin-right: 20px; }
+    .lcars-elbow { background: var(--lc-b); height: 60px; border-radius: 20px 0 0 20px; margin-bottom: 15px; position: relative; }
+    .lcars-elbow::after { content: ""; position: absolute; background: var(--lc-bg); width: 110px; height: 35px; bottom: 0; right: 0; border-top-left-radius: 15px; }
+    
+    .lcars-btn { background: var(--lc-o); color: #000; padding: 10px; text-decoration: none; font-weight: bold; font-size: 13px; text-align: right; margin-bottom: 5px; border-radius: 5px 0 0 5px; }
+    .lcars-btn.btn-back { background: var(--lc-p); }
+    .lcars-main-panel { flex-grow: 1; display: flex; flex-direction: column; }
+    
+    .lcars-dropdown-container { margin-bottom: 25px; background: #111116; padding: 15px; border-left: 6px solid var(--lc-o); border-radius: 0 10px 10px 0; }
+    .lcars-select { background: #000; color: var(--lc-o); border: 2px solid var(--lc-o); padding: 10px; font-size: 16px; text-transform: uppercase; border-radius: 5px; width: 100%; max-width: 400px; cursor: pointer; }
 
-        .lcars-header { display: flex; align-items: flex-end; margin-bottom: 15px; }
-        .lcars-bar-top { background-color: var(--lcars-blue); height: 40px; flex-grow: 1; border-bottom-left-radius: 20px; margin-right: 15px; position: relative; }
-        .lcars-bar-top::before { content: "SYS-LEARN-102"; position: absolute; left: 25px; bottom: 3px; color: #000000; font-weight: bold; font-size: 14px; }
-        .lcars-title { color: var(--lcars-blue); font-size: 28px; font-weight: 300; margin: 0; white-space: nowrap; }
+    .terminal-screen { background: #050508; border-left: 6px solid var(--lc-p); border-radius: 0 10px 10px 0; padding: 25px; height: 350px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 16px; line-height: 1.6; color: #55ff55; text-transform: none; margin-bottom: 25px; white-space: pre-wrap; scroll-behavior: smooth; }
 
-        .lcars-container { display: flex; min-height: 80vh; }
-        .lcars-left-bracket { width: 150px; display: flex; flex-direction: column; margin-right: 20px; }
-        .lcars-elbow { background-color: var(--lcars-blue); height: 60px; border-top-left-radius: 20px; border-bottom-left-radius: 20px; margin-bottom: 15px; position: relative; }
-        .lcars-elbow::after { content: ""; position: absolute; background-color: var(--lcars-bg); width: 110px; height: 35px; bottom: 0; right: 0; border-top-left-radius: 15px; }
-        
-        .lcars-btn { background-color: var(--lcars-orange); color: #000000; padding: 10px; text-decoration: none; font-weight: bold; font-size: 13px; text-align: right; margin-bottom: 5px; border-radius: 5px 0 0 5px; }
-        .lcars-btn.btn-back { background-color: var(--lcars-purple); }
-        .lcars-main-panel { flex-grow: 1; display: flex; flex-direction: column; }
-        
-        .lcars-dropdown-container {
-            margin-bottom: 25px;
-            background: #111116;
-            padding: 15px;
-            border-left: 6px solid var(--lcars-orange);
-            border-radius: 0 10px 10px 0;
-        }
-        .lcars-select {
-            background-color: #000000;
-            color: var(--lcars-orange);
-            border: 2px solid var(--lcars-orange);
-            padding: 10px;
-            font-size: 16px;
-            text-transform: uppercase;
-            border-radius: 5px;
-            width: 100%;
-            max-width: 400px;
-            cursor: pointer;
-        }
+    .engage-btn { background: var(--lc-pk); color: #000; border: none; padding: 15px 30px; font-size: 18px; font-weight: bold; cursor: pointer; border-radius: 10px; letter-spacing: 2px; width: 100%; text-align: center; text-decoration: none; display: inline-block; }
+    .engage-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
 
-        .terminal-screen {
-            background-color: #050508;
-            border-left: 6px solid var(--lcars-purple);
-            border-radius: 0 10px 10px 0;
-            padding: 25px;
-            height: 350px;
-            overflow-y: auto;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 16px;
-            line-height: 1.6;
-            color: #55ff55;
-            text-transform: none;
-            margin-bottom: 25px;
-            white-space: pre-wrap;
-            scroll-behavior: smooth;
-        }
-
-        .engage-btn {
-            background-color: var(--lcars-pink);
-            color: #000000;
-            border: none;
-            padding: 15px 30px;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 10px;
-            letter-spacing: 2px;
-            width: 100%;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .engage-btn:disabled {
-            background-color: #333333;
-            color: #666666;
-            cursor: not-allowed;
-        }
-
-        .prompt-box {
-            background-color: #111116;
-            border-left: 6px solid var(--lcars-green);
-            padding: 20px;
-            border-radius: 0 10px 10px 0;
-            margin-top: 20px;
-            display: none;
-        }
-        .btn-group { display: flex; gap: 15px; margin-top: 15px; }
-    </style>
+    .prompt-box { background: #111116; border-left: 6px solid var(--lc-g); padding: 20px; border-radius: 0 10px 10px 0; margin-top: 20px; display: none; }
+    .btn-group { display: flex; gap: 15px; margin-top: 15px; }
+</style>
 </head>
 <body>
     <header class="lcars-header">
@@ -170,7 +97,7 @@ $text_files = glob($course_directory . "*.txt");
         </main>
     </div>
 
-    <script>
+            <script>
         let currentText = "";
         let index = 0;
         let isPaused = false;
@@ -182,9 +109,10 @@ $text_files = glob($course_directory . "*.txt");
         }
 
         function startCourseLoad() {
-            const selectedCourse = document.getElementById('course-select').value;
+            let selectedCourse = document.getElementById('course-select').value;
             const terminal = document.getElementById('terminal');
             
+            // Clean up any old running typewriter instances immediately
             clearTimeout(typewriterTimeout);
             
             terminal.innerHTML = "ESTABLISHING MAIN SUBSPACE BRIDGE LINK...";
@@ -195,13 +123,22 @@ $text_files = glob($course_directory . "*.txt");
             isPaused = false;
             const pauseBtn = document.getElementById('pause-btn');
             pauseBtn.innerHTML = "PAUSE MATRIX STREAM";
-            pauseBtn.style.backgroundColor = "var(--lcars-orange)";
+            pauseBtn.style.backgroundColor = "var(--lc-o)"; // Matching your condensed variable names
             pauseBtn.style.display = 'none';
+
+            // 🔒 PATH TRAVERSAL FIX: Strip dots, slashes, and spaces
+            selectedCourse = selectedCourse.replace(/[^a-zA-Z0-9_\-]/g, '');
+
+            if (!selectedCourse) {
+                terminal.innerHTML = "CRITICAL MAINFRAME REJECTION: \nINVALID SECTOR PROTOCOL STRINGS DETECTED.";
+                document.getElementById('start-btn').disabled = false;
+                return;
+            }
 
             fetch('doc/sdq_classes/' + selectedCourse + '.txt')
                 .then(response => {
                     if (!response.ok) {
-                        throw new Error("Target file [doc/sdq_classes/" + selectedCourse + ".txt] not located in server path.");
+                        throw new Error("Target file not located in server path.");
                     }
                     return response.text();
                 })
@@ -209,7 +146,7 @@ $text_files = glob($course_directory . "*.txt");
                     terminal.innerHTML = "";
                     currentText = text;
                     index = 0;
-                    pauseBtn.style.display = 'inline-block'; 
+                    pauseBtn.style.display = 'inline-block'; // Displays the pause button when content successfully loads
                     typeWriter();
                 })
                 .catch(error => {
@@ -219,6 +156,7 @@ $text_files = glob($course_directory . "*.txt");
         }
 
         function typeWriter() {
+            // If the user paused the stream, exit the loop cleanly without printing characters
             if (isPaused) return; 
 
             if (index < currentText.length) {
@@ -226,8 +164,11 @@ $text_files = glob($course_directory . "*.txt");
                 terminal.innerHTML += currentText.charAt(index);
                 index++;
                 terminal.scrollTop = terminal.scrollHeight;
+                
+                // Continue running the typewriter loop
                 typewriterTimeout = setTimeout(typeWriter, speed);
             } else {
+                // Course stream completed successfully
                 document.getElementById('pause-btn').style.display = 'none';
                 document.getElementById('remediation-prompt').style.display = 'block';
             }
@@ -238,19 +179,23 @@ $text_files = glob($course_directory . "*.txt");
             
             if (!isPaused) {
                 isPaused = true;
-                clearTimeout(typewriterTimeout);
+                clearTimeout(typewriterTimeout); // Instantly freeze the active countdown loop
                 pauseBtn.innerHTML = "RESUME MATRIX STREAM";
-                pauseBtn.style.backgroundColor = "var(--lcars-green)";
+                pauseBtn.style.backgroundColor = "var(--lc-g)"; // Uses the green theme for resume state
             } else {
                 isPaused = false;
                 pauseBtn.innerHTML = "PAUSE MATRIX STREAM";
-                pauseBtn.style.backgroundColor = "var(--lcars-orange)";
-                typeWriter(); 
+                pauseBtn.style.backgroundColor = "var(--lc-o)"; // Reverts to orange theme for pause state
+                typeWriter(); // Safely restart the loop from the current text index position
             }
         }
 
         function studyChoice(wantStudy) {
-            const courseValue = document.getElementById('course-select').value;
+            let courseValue = document.getElementById('course-select').value;
+            
+            // Apply the same path filtering verification before transferring data targets
+            courseValue = courseValue.replace(/[^a-zA-Z0-9_\-]/g, '');
+            
             const testUrl = "exams_web.php?courses=" + encodeURIComponent(courseValue);
             
             if (wantStudy) {
