@@ -1,5 +1,5 @@
 <?php
-include( 'session.php' );
+include_once( 'session.php' ); // 🔒 include_once stops the double-declaration fatal crash
 
 // Safely define the variable from session or fallback to prevent the Undefined Variable warning
 $login_session = $login_session ?? '';
@@ -11,43 +11,60 @@ if (empty($login_session)) {
 }
 
 if (!isset($db)) {
-    include("config.php"); 
+    include_once("config.php"); 
 }
 
-// Clean and cross-check active session tracking identifier
-$auth_username = mysqli_real_escape_string($db, $login_session);
+// Ensure file queries link seamlessly with your config's connection variable
+if (isset($db) && !isset($conn)) {
+    $conn = $db;
+}
 
-// Query database cluster node for administrative privileges
-$sql_check = "SELECT dh FROM accounts WHERE username = '$auth_username' LIMIT 1";
-$res_check = mysqli_query($db, $sql_check);
+$user_auth_handle = $login_session;
 
-if ($res_check && mysqli_num_rows($res_check) == 1) {
-    $auth_data = mysqli_fetch_assoc($res_check);
-    
-    // Strict integer evaluation: if dh is 0, reject entry immediately
-    if ((int)$auth_data['dh'] !== 1) {
-        header("Location: notauthorized.php?error=clearance_insufficient");
+// 🔒 1. PARAMETERIZED PRIVILEGES CHECK (Replaces vulnerable unquoted concatenation string)
+$sql_check = "SELECT dh FROM accounts WHERE username = ? LIMIT 1";
+if ($stmt_auth = $conn->prepare($sql_check)) {
+    $stmt_auth->bind_param("s", $user_auth_handle);
+    $stmt_auth->execute();
+    $res_check = $stmt_auth->get_result();
+
+    if ($res_check && $res_check->num_rows === 1) {
+        $auth_data = $res_check->fetch_assoc();
+        
+        // Strict integer evaluation: if dh is not 1, reject entry immediately
+        if ((int)$auth_data['dh'] !== 1) {
+            $stmt_auth->close();
+            header("Location: notauthorized.php?error=clearance_insufficient");
+            exit();
+        }
+    } else {
+        $stmt_auth->close();
+        header("Location: index.php");
         exit();
     }
+    $stmt_auth->close();
 } else {
-    // If user mapping record disappears from system array entirely
-    header("Location: index.php");
-    exit();
+    die("CRITICAL MATRIX FAULT: SECURITY NODE ASSESSMENT FAILURE.");
 }
 
-// Check for unread message telemetry inside the message cluster matrix
-$check_user = mysqli_real_escape_string($db, $login_session);
-$sql_mail = "SELECT COUNT(*) as total_msg FROM `messages` WHERE `to_username` = '$check_user' AND `is_read` = 0";
-$res_mail = mysqli_query($db, $sql_mail);
+// 🔒 2. PARAMETERIZED MESSAGE COUNT MATRIX (Completely immunizes your unread counts lookup loop)
+$sql_mail = "SELECT COUNT(*) as total_msg FROM `messages` WHERE `to_username` = ? AND `is_read` = 0";
 $unread_count = 0;
 $has_mail = false;
 
-if ($res_mail) {
-    $mail_row = mysqli_fetch_assoc($res_mail);
-    $unread_count = (int)$mail_row['total_msg'];
-    if ($unread_count > 0) {
-        $has_mail = true;
+if ($stmt_mail = $conn->prepare($sql_mail)) {
+    $stmt_mail->bind_param("s", $user_auth_handle);
+    $stmt_mail->execute();
+    $res_mail = $stmt_mail->get_result();
+
+    if ($res_mail) {
+        $mail_row = $res_mail->fetch_assoc();
+        $unread_count = (int)$mail_row['total_msg'];
+        if ($unread_count > 0) {
+            $has_mail = true;
+        }
     }
+    $stmt_mail->close();
 }
 ?>
 <!DOCTYPE html>
