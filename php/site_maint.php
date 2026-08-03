@@ -4,7 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 include_once('session.php'); // 🔒 include_once completely prevents function redeclaration crashes
-
+include_once('functions.php');
 // Safely define the variable from session or fallback to prevent undefined variable warnings
 $login_session = $login_session ?? '';
 
