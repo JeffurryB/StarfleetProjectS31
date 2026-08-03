@@ -1,8 +1,11 @@
+<?php
+    include_once ('config.php');
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LCARS Subspace Routing Error - 403</title>
+    <title><?php echo GROUP_ABBR; ?> Subspace Routing Error - 403</title>
     <style>
         :root {
             --lcars-purple: #9966cc;
@@ -114,7 +117,7 @@
                 <div class="lcars-alert-box">
                     <div class="alert-heading">403 FORBIDDEN - NOT AUTHORIZED</div>
                     <div class="alert-text">
-                        ACCESS DENIED. YOUR SUB-NET ACCOUNT IDENTIFIER DOES NOT POSSESS THE REQUIRED LEVEL 10 ADMINISTRATIVE CLEARANCE METADATA TO INITIATE SYSTEM PROFILE EDITS..<br><br>
+                        ACCESS DENIED. YOUR SUB-NET ACCOUNT IDENTIFIER DOES NOT POSSESS THE REQUIRED LEVEL 10 ADMINISTRATIVE CLEARANCE METADATA TO INITIATE THIS SYSTEM..<br><br>
                         THIS TERMINAL ATTEMPT HAS BEEN LOGGED WITHIN THE COMPUTER CORE DATABASE ARRAY.
                     </div>
                 </div>
