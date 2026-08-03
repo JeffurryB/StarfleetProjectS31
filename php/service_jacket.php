@@ -1,6 +1,11 @@
 <?php
-include 'session.php'; 
-include 'config.php'; // 🗄️ Loads your global database configuration connection
+// 1. Session, Config, and Layout Linkage
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once 'session.php'; 
+include_once 'config.php'; // 🗄️ Loads your global database configuration connection
+include_once 'functions.php'; // Ensure security logging modules are in scope
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -14,83 +19,140 @@ if (isset($db) && !isset($conn)) {
 // Extract the authenticated username identifier using your exact 'login_user' session key
 $current_session_user = isset($_SESSION['login_user']) ? trim($_SESSION['login_user']) : 'Cadet_Kirk'; 
 
+// 🔒 CSRF INITIALIZATION MATRIX: Seed authorization verification signatures
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $update_success = "";
 
-// Handle incoming bio updates securely
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'update_bio') {
-    $new_bio = isset($_POST['bio_text']) ? trim($_POST['bio_text']) : '';
+// Handle state changing actions via POST securely
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     
-    $updateSql = "UPDATE accounts SET bio = ? WHERE username = ?";
-    if ($updateStmt = $conn->prepare($updateSql)) {
-        $updateStmt->bind_param("ss", $new_bio, $current_session_user);
-        if ($updateStmt->execute()) {
-            $update_success = "SUB-ROUTINE SUCCESSFUL: BIOGRAPHY METRICS UPDATED.";
+    // 🔒 CSRF SECURITY FIREWALL: Drop cross-site automated matrix forge attempts instantly
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        header("HTTP/1.1 403 Forbidden");
+        die("CRITICAL SECURITY ERROR: CSRF MATRIX MALFUNCTION. PROFILE METRICS OPERATION TERMINATED.");
+    }
+
+    // ROUTE A: Handle incoming bio updates securely
+    if ($_POST['action'] === 'update_bio') {
+        $new_bio = isset($_POST['bio_text']) ? trim($_POST['bio_text']) : '';
+        
+        $updateSql = "UPDATE accounts SET bio = ? WHERE username = ?";
+        if ($updateStmt = $conn->prepare($updateSql)) {
+            $updateStmt->bind_param("ss", $new_bio, $current_session_user);
+            if ($updateStmt->execute()) {
+                $update_success = "SUB-ROUTINE SUCCESSFUL: BIOGRAPHY METRICS UPDATED.";
+            } else {
+                $update_success = "SYS_ERR: BIOGRAPHY SUB-ROUTINE CRITICAL FAILURE.";
+            }
+            $updateStmt->close();
         } else {
             $update_success = "SYS_ERR: BIOGRAPHY SUB-ROUTINE CRITICAL FAILURE.";
         }
-        $updateStmt->close();
-    } else {
-        $update_success = "SYS_ERR: BIOGRAPHY SUB-ROUTINE CRITICAL FAILURE.";
     }
-}
 
-// HANDLE INCOMING PROFILE PHOTO UPLOADS SECURELY
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'upload_photo') {
-    if (isset($_FILES['profile_img']) && $_FILES['profile_img']['error'] === UPLOAD_ERR_OK) {
-        $file_tmp = $_FILES['profile_img']['tmp_name'];
-        $file_orig_name = basename($_FILES['profile_img']['name']);
-        $file_ext = strtolower(pathinfo($file_orig_name, PATHINFO_EXTENSION));
-        
-        $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-        
-        if (in_array($file_ext, $allowed_extensions)) {
-            $target_dir = "ProfilePics/";
+    // ROUTE B: HANDLE INCOMING PROFILE PHOTO UPLOADS SECURELY
+    if ($_POST['action'] === 'upload_photo') {
+        if (isset($_FILES['profile_img']) && $_FILES['profile_img']['error'] === UPLOAD_ERR_OK) {
+            $file_tmp = $_FILES['profile_img']['tmp_name'];
+            $file_orig_name = basename($_FILES['profile_img']['name']);
             
-            if (!is_dir($target_dir)) { 
-                mkdir($target_dir, 0755, true); 
-            }
+            // 🔒 LAYER 1: Extract and strictly validate file extension structure
+            $file_ext = strtolower(pathinfo($file_orig_name, PATHINFO_EXTENSION));
+            $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
             
-            $clean_session_name = preg_replace("/[^a-zA-Z0-9_\-]/", "", $current_session_user);
-            $new_filename = "AVATAR_" . $clean_session_name . "_" . time() . "." . $file_ext;
-            $full_target_path = $target_dir . $new_filename;
-            
-            if (move_uploaded_file($file_tmp, $full_target_path)) {
-                $photoSql = "UPDATE accounts SET profile_img = ? WHERE username = ?";
-                if ($photoStmt = $conn->prepare($photoSql)) {
-                    $photoStmt->bind_param("ss", $full_target_path, $current_session_user);
-                    if ($photoStmt->execute()) {
-                        $update_success = "DATA STREAM OVERLAY COMPLETE: NEW AVATAR RENDERED SUCCESSFULLY.";
-                    } else {
-                        $update_success = "SYS_ERR: DATABASE CORRUPTION OR MATRIX WRITE EXCEPTION.";
+            if (in_array($file_ext, $allowed_extensions, true)) {
+                
+                // 🔒 LAYER 2: Server-Side MIME-Type Signature Verification (Bypasses polyglot image tricks)
+                $finfo = new finfo(FILEINFO_MIME_TYPE);
+                $real_mime = $finfo->file($file_tmp);
+                $allowed_mimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                
+                if (in_array($real_mime, $allowed_mimes, true)) {
+                    $target_dir = "ProfilePics/";
+                    
+                    if (!is_dir($target_dir)) { 
+                        mkdir($target_dir, 0755, true); 
                     }
-                    $photoStmt->close();
+                    
+                    // 🔒 LAYER 3: Completely randomize the filename using high-entropy hashes
+                    // This systematically breaks predictable execution strings like AVATAR_username_timestamp
+                    $secure_filename = "avatar_" . bin2hex(random_bytes(16)) . "." . $file_ext;
+                    $full_target_path = $target_dir . $secure_filename;
+                    
+                    // Fetch existing profile photo so we can purge old entries from physical disk safely
+                    $old_pic_sql = "SELECT profile_img FROM accounts WHERE username = ? LIMIT 1";
+                    if ($stmt_old_pic = $conn->prepare($old_pic_sql)) {
+                        $stmt_old_pic->bind_param("s", $current_session_user);
+                        $stmt_old_pic->execute();
+                        $res_old_pic = $stmt_old_pic->get_result();
+                        if ($res_old_pic && $row_pic = $res_old_pic->fetch_assoc()) {
+                            $old_path = $row_pic['profile_img'];
+                            if (file_exists($old_path) && $old_path !== 'ProfilePics/Default_Profile_Pic.png' && $old_path !== 'ProfilePics/logo.png') {
+                                @unlink($old_path);
+                            }
+                        }
+                        $stmt_old_pic->close();
+                    }
+
+                    if (move_uploaded_file($file_tmp, $full_target_path)) {
+                        $photoSql = "UPDATE accounts SET profile_img = ? WHERE username = ?";
+                        if ($photoStmt = $conn->prepare($photoSql)) {
+                            $photoStmt->bind_param("ss", $full_target_path, $current_session_user);
+                            if ($photoStmt->execute()) {
+                                $update_success = "DATA STREAM OVERLAY COMPLETE: NEW AVATAR RENDERED SUCCESSFULLY.";
+                            } else {
+                                $update_success = "SYS_ERR: DATABASE CORRUPTION OR MATRIX WRITE EXCEPTION.";
+                            }
+                            $photoStmt->close();
+                        } else {
+                            $update_success = "SYS_ERR: DATABASE CORRUPTION OR MATRIX WRITE EXCEPTION.";
+                        }
+                    } else {
+                        $update_success = "CRITICAL EXCEPTION: FILE SYSTEM WRITE ROUTINE FAILURE.";
+                    }
                 } else {
-                    $update_success = "SYS_ERR: DATABASE CORRUPTION OR MATRIX WRITE EXCEPTION.";
+                    $update_success = "CRITICAL EXCEPTION: SECURITY SCAN BLOCKED MALFORMED DATA SPECIFICATION.";
                 }
             } else {
-                $update_success = "CRITICAL EXCEPTION: FILE SYSTEM WRITE ROUTINE FAILURE.";
+                $update_success = "CRITICAL EXCEPTION: SECURITY SCAN BLOCKED REJECTED FILE SPECIFICATION.";
             }
         } else {
-            $update_success = "CRITICAL EXCEPTION: SECURITY SCAN BLOCKED REJECTED FILE SPECIFICATION.";
+            $update_success = "CRITICAL EXCEPTION: CHRONOMETER CORE DISCONNECTED SUB-STREAM DATA.";
         }
-    } else {
-        $update_success = "CRITICAL EXCEPTION: CHRONOMETER CORE DISCONNECTED SUB-STREAM DATA.";
     }
-}
 
-// ROUTE C: SIMPLIFIED DEFAULT PICTURE RESTORATION ROUTE
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'reset_photo') {
-    $resetSql = "UPDATE accounts SET profile_img = 'ProfilePics/Default_Profile_Pic.png' WHERE username = ?";
-    if ($resetStmt = $conn->prepare($resetSql)) {
-        $resetStmt->bind_param("s", $current_session_user);
-        if ($resetStmt->execute()) {
-            $update_success = "MATRIX RESET: PROFILE IMAGE RESTORED TO DEFAULT SPECIFICATION.";
+    // ROUTE C: PICTURE RESTORATION ROUTE
+    if ($_POST['action'] === 'reset_photo') {
+        // Fetch and purge old image assets from disk right before restoring defaults
+        $old_pic_sql = "SELECT profile_img FROM accounts WHERE username = ? LIMIT 1";
+        if ($stmt_old_pic = $conn->prepare($old_pic_sql)) {
+            $stmt_old_pic->bind_param("s", $current_session_user);
+            $stmt_old_pic->execute();
+            $res_old_pic = $stmt_old_pic->get_result();
+            if ($res_old_pic && $row_pic = $res_old_pic->fetch_assoc()) {
+                $old_path = $row_pic['profile_img'];
+                if (file_exists($old_path) && $old_path !== 'ProfilePics/Default_Profile_Pic.png' && $old_path !== 'ProfilePics/logo.png') {
+                    @unlink($old_path);
+                }
+            }
+            $stmt_old_pic->close();
+        }
+
+        $resetSql = "UPDATE accounts SET profile_img = 'ProfilePics/Default_Profile_Pic.png' WHERE username = ?";
+        if ($resetStmt = $conn->prepare($resetSql)) {
+            $resetStmt->bind_param("s", $current_session_user);
+            if ($resetStmt->execute()) {
+                $update_success = "MATRIX RESET: PROFILE IMAGE RESTORED TO DEFAULT SPECIFICATION.";
+            } else {
+                $update_success = "SYS_ERR: PROFILE IMAGE RESET EXCEPTION LOGGED.";
+            }
+            $resetStmt->close();
         } else {
             $update_success = "SYS_ERR: PROFILE IMAGE RESET EXCEPTION LOGGED.";
         }
-        $resetStmt->close();
-    } else {
-        $update_success = "SYS_ERR: PROFILE IMAGE RESET EXCEPTION LOGGED.";
     }
 }
 
@@ -135,7 +197,6 @@ if ($user) {
         $gradebookStmt->close();
     }
 } else {
-    // Structural Fallback Array if account registration profile row doesn't resolve
     $user = [
         'username' => 'Cadet_Kirk',
         'rname' => 'Cadet First Class',
@@ -152,244 +213,69 @@ if ($user) {
     ];
 }
 
-// SECURE ADMINISTRATIVE NAVIGATION OVERLAY DETECTOR
-$nav_user = mysqli_real_escape_string($conn, $login_session);
-$sql_nav = "SELECT dh FROM accounts WHERE username = '$nav_user' LIMIT 1";
-$res_nav = mysqli_query($conn, $sql_nav);
+// SECURE ADMINISTRATIVE NAVIGATION OVERLAY DETECTOR (🛡️ PREPARED STATEMENT UPGRADE)
 $is_admin = false;
-
-if ($res_nav && mysqli_num_rows($res_nav) == 1) {
-    $nav_row = mysqli_fetch_assoc($res_nav);
-    if ((int)$nav_row['dh'] === 1) {
-        $is_admin = true;
-    }
-}
-
+if (isset($login_session)) {
+    $nav_user = $login_session;
+$sql_nav = "SELECT dh FROM accounts WHERE username = ? LIMIT 1";if ($stmt_nav = $conn->prepare($sql_nav)) {$stmt_nav->bind_param("s", $nav_user);$stmt_nav->execute();$res_nav = $stmt_nav->get_result();if ($res_nav && $res_nav->num_rows === 1) {$nav_row = $res_nav->fetch_assoc();if ((int)$nav_row['dh'] === 1) {$is_admin = true;}}$stmt_nav->close();}}
 // Set up the default placeholder image path logic
 $profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfilePics/logo.png';
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>LCARS - Service Jacket</title>
     <style>
-   
-        
-        body {
-            background-color: #000000;
-            color: #ff9900;
-            font-family: 'Antonio', sans-serif;
-            letter-spacing: 0.05em;
-            margin: 20px;
-            text-transform: uppercase;
-        }
-        .lcars-container {
-            display: flex;
-            max-width: 950px;
-            margin: 0 auto;
-        }
-        .lcars-left-bar {
-            width: 140px;
-            border-right: 15px solid #ffcc00;
-            border-radius: 40px 0 0 40px;
-            padding-right: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            align-items: flex-end;
-        }
-        .lcars-pill {
-            background-color: #ff9900;
-            color: #000;
-            width: 90px;
-            height: 30px;
-            border-radius: 15px;
-            text-align: center;
-            line-height: 30px;
-            font-weight: bold;
-            font-size: 13px;
-        }
-        .lcars-pill.blue { background-color: #5599cc; }
-        .lcars-pill.purple { background-color: #cc99cc; }
-        
-        .lcars-main-content {
-            flex-grow: 1;
-            padding-left: 30px;
-        }
-        .lcars-header {
-            font-size: 38px;
-            color: #ffcc00;
-            margin-bottom: 20px;
-            border-bottom: 4px solid #ff9900;
-            padding-bottom: 5px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .lcars-header-index {
-            color: #5599cc;
-            font-size: 18px;
-            align-self: flex-end;
-        }
+    body { background: #000; color: #f90; font-family: 'Antonio', sans-serif; letter-spacing: .05em; margin: 20px; text-transform: uppercase; }
+    .lcars-container { display: flex; max-width: 950px; margin: 0 auto; }
+    .lcars-left-bar { width: 140px; border-right: 15px solid #fc0; border-radius: 40px 0 0 40px; padding-right: 15px; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; }
+    .lcars-pill { background: #f90; color: #000; width: 90px; height: 30px; border-radius: 15px; text-align: center; line-height: 30px; font-weight: bold; font-size: 13px; }
+    .lcars-pill.blue { background: #59c; }
+    .lcars-pill.purple { background: #c9c; }
+    
+    .lcars-main-content { flex-grow: 1; padding-left: 30px; }
+    .lcars-header { font-size: 38px; color: #fc0; margin-bottom: 20px; border-bottom: 4px solid #f90; padding-bottom: 5px; display: flex; justify-content: space-between; }
+    .lcars-header-index { color: #59c; font-size: 18px; align-self: flex-end; }
 
-        /* Profile Split Grid Panel Setup */
-        .jacket-grid {
-            display: grid;
-            grid-template-columns: 220px 25px 1fr; 
-            gap: 15px;
-            align-items: start;
-            margin-top: 30px;
-        }
+    .jacket-grid { display: grid; grid-template-columns: 220px 25px 1fr; gap: 15px; align-items: start; margin-top: 30px; }
+    .profile-side-column { display: flex; flex-direction: column; gap: 15px; width: 220px; }
+    .profile-wrapper { border: 3px solid #c9c; padding: 8px; border-radius: 10px; background: #050505; display: flex; justify-content: center; align-items: center; box-sizing: border-box; }
+    .profile-image { width: 200px; height: 200px; object-fit: cover; border-radius: 4px; border: 1px solid #59c; }
 
-        /* NEW: Vertical Left Column container to align Image and Button stack neatly */
-        .profile-side-column {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            width: 220px;
-        }
+    .lcars-btn-pill { background: #fc0; color: #000; border: none; width: 100%; padding: 10px 0; font: bold 18px 'Antonio', sans-serif; letter-spacing: .05em; border-radius: 20px; cursor: pointer; text-align: center; text-transform: uppercase; transition: background .15s ease-in-out; }
+    .lcars-btn-pill:hover { background: #f90; }
 
-        .profile-wrapper {
-            border: 3px solid #cc99cc;
-            padding: 8px;
-            border-radius: 10px;
-            background-color: #050505;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-sizing: border-box;
-        }
-        .profile-image {
-            width: 200px;
-            height: 200px;
-            object-fit: cover;
-            border-radius: 4px;
-            border: 1px solid #5599cc;
-        }
+    .spacer-line-container { display: flex; flex-direction: column; align-items: center; height: 100%; min-height: 250px; }
+    .spacer-cap-top, .spacer-cap-bottom { width: 16px; height: 8px; background: #59c; border-radius: 4px 4px 0 0; }
+    .spacer-cap-bottom { border-radius: 0 0 4px 4px; }
+    .spacer-line-vertical { width: 4px; flex-grow: 1; background: #59c; margin: 4px 0; }
+    
+    .data-panel { display: flex; flex-direction: column; gap: 12px; }
+    .data-row { display: grid; grid-template-columns: 160px 1fr; border-bottom: 1px dashed #333; padding-bottom: 6px; font-size: 20px; }
+    .data-label { color: #c9c; font-weight: bold; }
+    .data-value { color: #fff; }
 
-        /* Classic Pill-Shaped Gold LCARS Interactive Button Styling */
-        .lcars-btn-pill {
-            background-color: #ffcc00;
-            color: #000000;
-            border: none;
-            width: 100%;
-            padding: 10px 0;
-            font-family: 'Antonio', sans-serif;
-            font-weight: bold;
-            font-size: 18px;
-            letter-spacing: 0.05em;
-            border-radius: 20px;
-            cursor: pointer;
-            text-align: center;
-            text-transform: uppercase;
-            transition: background 0.15s ease-in-out;
-        }
-        .lcars-btn-pill:hover {
-            background-color: #ff9900;
-        }
+    .exams-log-container { display: flex; flex-direction: column; gap: 5px; }
+    .exam-item { display: flex; justify-content: space-between; background: #111; padding: 4px 10px; border-left: 5px solid #59c; font-size: 16px; }
+    .exam-date { color: #59c; }
+    .no-exams { color: #666; font-size: 16px; font-style: italic; }
 
-        .spacer-line-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            height: 100%;
-            min-height: 250px;
-        }
-        .spacer-cap-top, .spacer-cap-bottom {
-            width: 16px;
-            height: 8px;
-            background-color: #5599cc;
-            border-radius: 4px 4px 0 0;
-        }
-        .spacer-cap-bottom { border-radius: 0 0 4px 4px; }
-        .spacer-line-vertical {
-            width: 4px;
-            flex-grow: 1;
-            background-color: #5599cc;
-            margin: 4px 0;
-        }
-        .data-panel {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .data-row {
-            display: grid;
-            grid-template-columns: 160px 1fr;
-            border-bottom: 1px dashed #333333;
-            padding-bottom: 6px;
-            font-size: 20px;
-        }
-        .data-label { color: #cc99cc; font-weight: bold; }
-        .data-value { color: #ffffff; }
+    .lcars-section-header { font-size: 30px; color: #fc0; margin-top: 40px; margin-bottom: 25px; border-bottom: 4px solid #c9c; padding-bottom: 5px; display: flex; justify-content: space-between; }
+    .lcars-section-index { color: #c9c; font-size: 16px; align-self: flex-end; }
+    .bio-section { background: #050505; border-left: 6px solid #fc0; padding: 15px; border-radius: 0 10px 10px 0; }
+    .bio-body-text { color: #ddd; font-size: 18px; line-height: 1.5; letter-spacing: .03em; text-transform: none; }
 
-        .exams-log-container { display: flex; flex-direction: column; gap: 5px; }
-        .exam-item {
-            display: flex;
-            justify-content: space-between;
-            background-color: #111111;
-            padding: 4px 10px;
-            border-left: 5px solid #5599cc;
-            font-size: 16px;
-        }
-        .exam-date { color: #5599cc; }
-        .no-exams { color: #666666; font-size: 16px; font-style: italic; }
+    .lcars-action-btn { background: #59c; color: #000; border: none; padding: 5px 15px; font: bold 14px 'Antonio', sans-serif; border-radius: 12px; cursor: pointer; text-transform: uppercase; }
+    .lcars-action-btn:hover { background: #f90; }
 
-        .lcars-section-header {
-            font-size: 30px;
-            color: #ffcc00;
-            margin-top: 40px;
-            margin-bottom: 25px;
-            border-bottom: 4px solid #cc99cc;
-            padding-bottom: 5px;
-            display: flex;
-            justify-content: space-between;
-        }
-        .lcars-section-index { color: #cc99cc; font-size: 16px; align-self: flex-end; }
-        .bio-section {
-            background-color: #050505;
-            border-left: 6px solid #ffcc00;
-            padding: 15px;
-            border-radius: 0 10px 10px 0;
-        }
-        .bio-body-text { color: #dddddd; font-size: 18px; line-height: 1.5; letter-spacing: 0.03em; text-transform: none; }
-
-        .lcars-action-btn {
-            background-color: #5599cc;
-            color: #000;
-            border: none;
-            padding: 5px 15px;
-            font-family: 'Antonio', sans-serif;
-            font-weight: bold;
-            font-size: 14px;
-            border-radius: 12px;
-            cursor: pointer;
-            text-transform: uppercase;
-        }
-        .lcars-action-btn:hover { background-color: #ff9900; }
-
-        .lcars-modal {
-            position: fixed !important;
-            top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important;
-            background-color: rgba(0,0,0,0.85) !important;
-            justify-content: center !important; align-items: center !important;
-            z-index: 99999 !important;
-        }
-        .modal-content {
-            background-color: #000; border: 3px solid #ff9900; padding: 25px;
-            width: 100%; max-width: 500px; border-radius: 15px;
-            box-shadow: 0 0 20px rgba(255, 153, 0, 0.4);
-        }
-        .modal-header { font-size: 26px; color: #ffcc00; margin-bottom: 15px; border-bottom: 2px solid #ff9900; padding-bottom: 5px;}
-        .lcars-textarea {
-            width: 100%; height: 150px; background-color: #111; border: 2px solid #5599cc;
-            color: #fff; padding: 10px; font-size: 16px; font-family: sans-serif; box-sizing: border-box;
-            border-radius: 5px; resize: none; margin-bottom: 15px;
-        }
-        .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; }
-        .lcars-success-banner { color: #00ff00; font-weight: bold; font-size: 16px; margin-bottom: 15px; }
-    </style>
+    .lcars-modal { position: fixed !important; top: 0 !important; left: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0,0,0,.85) !important; display: flex !important; justify-content: center !important; align-items: center !important; z-index: 99999 !important; }
+    .modal-content { background: #000; border: 3px solid #f90; padding: 25px; width: 100%; max-width: 500px; border-radius: 15px; box-shadow: 0 0 20px rgba(255,153,0,.4); }
+    .modal-header { font-size: 26px; color: #fc0; margin-bottom: 15px; border-bottom: 2px solid #f90; padding-bottom: 5px; }
+    .lcars-textarea { width: 100%; height: 150px; background: #111; border: 2px solid #59c; color: #fff; padding: 10px; font-size: 16px; font-family: sans-serif; box-sizing: border-box; border-radius: 5px; resize: none; margin-bottom: 15px; }
+    .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; }
+    .lcars-success-banner { color: #0f0; font-weight: bold; font-size: 16px; margin-bottom: 15px; }
+</style>
 </head>
 <body>
 
