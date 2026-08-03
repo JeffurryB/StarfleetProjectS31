@@ -213,12 +213,14 @@ include_once("maintenance_panel_view.php");
                 </div>
 
                 <!-- Executable Action Interface Form -->
-                <form method="POST">
-                    <button type="submit" name="toggle_maintenance" class="lcars-submit-btn" style="background-color: <?php echo $maintenance_is_on ? 'var(--lcars-blue)' : '#cc3333'; ?>; color: <?php echo $maintenance_is_on ? '#000000' : '#ffffff'; ?>;">
-                        <?php echo $maintenance_is_on ? 'Deactivate Lockout Mode (Go Live)' : 'Isolate Matrix Core Network'; ?>
-                    </button>
-                </form>
-
+                <form method="POST" action="">
+    <!-- 🔒 CSRF DEFENSE SHIELD OVERLAY -->
+    <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($_SESSION['csrf_token'] ?? ''); ?>">
+    
+    <button type="submit" name="toggle_maintenance" class="lcars-submit-btn" style="background-color: <?php echo $maintenance_is_on ? 'var(--lcars-blue)' : '#cc3333'; ?>; color: <?php echo $maintenance_is_on ? '#000000' : '#ffffff'; ?>;">
+        <?php echo $maintenance_is_on ? 'Deactivate Lockout Mode (Go Live)' : 'Isolate Matrix Core Network'; ?>
+    </button>
+</form>
                 <!-- Dynamic Telemetry Readout Fields -->
                 <ul class="system-readout">
                     <li>NETWORK CORE NODE: <span>INFINITYFREE_CLUSTER_06</span></li>
