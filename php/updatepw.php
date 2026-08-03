@@ -4,65 +4,80 @@ ini_set('display_startup_errors', 1);
 error_reporting(E_ALL);
 
 // 1. INCLUDE GLOBAL CONFIGURATION MANAGEMENT
-include("config.php"); 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once("config.php"); 
 
 // Ensure the local file script maps cleanly to your config's database variable
 if (isset($db) && !isset($conn)) {
     $conn = $db;
 }
 
+// 🔒 CSRF INITIALIZATION MATRIX: Seed tracking parameters if not set
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+$message_html = "";
+
 // 2. Handle Form Submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    
+    // 🔒 CSRF SECURITY FIREWALL: Terminate request instantly if validation signature fails
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        header("HTTP/1.1 403 Forbidden");
+        die("CRITICAL SECURITY ERROR: CSRF MATRIX MALFUNCTION. PASSWORD OVERRIDE TERMINATED.");
+    }
+
     $user = isset($_POST['username']) ? trim($_POST['username']) : '';
     $cCode = isset($_POST['cCode']) ? trim($_POST['cCode']) : '';
     $newPassword = isset($_POST['new_password']) ? $_POST['new_password'] : '';
 
     if (!empty($user) && !empty($cCode) && !empty($newPassword)) {
         
-        // 3. Verify username and cCode, and retrieve the UUID via MySQLi
-        $account = null;
-        $checkSql = "SELECT UUID FROM accounts WHERE username = ? AND cCode = ? LIMIT 1";
+        // 3. Verify username and cCode, and retrieve account status via MySQLi
+        $account_found = false;
+        $checkSql = "SELECT ID FROM accounts WHERE username = ? AND cCode = ? LIMIT 1";
         
         if ($checkStmt = $conn->prepare($checkSql)) {
             $checkStmt->bind_param("ss", $user, $cCode);
             $checkStmt->execute();
             $res = $checkStmt->get_result();
             if ($res && $res->num_rows > 0) {
-                $account = $res->fetch_assoc();
+                $account_found = true;
             }
             $checkStmt->close();
         }
 
-        if ($account) {
-            // 4. Generate the 128-character SHA-512 Hash using the fetched UUID
-            $uuid = $account['UUID'];
-            $pepper = "*&&^%$DFHDSKJ*%*%&#WE&#@"; // Must match your registration script
-            $hashInput = $newPassword . $uuid . $pepper;
-            $sha512Hash = hash('sha512', $hashInput);
+        if ($account_found) {
+            // 🔒 KEY STRETCHING PROTOCOL: Calculate standard Bcrypt slow hashes with work factor cost
+            // This function completely neutralizes GPU dictionary attacks by generating dynamic internal user salts automatically.
+            $secure_bcrypt_hash = password_hash($newPassword, PASSWORD_BCRYPT, ['cost' => 12]);
 
             // 5. Update password and clear the cCode so it cannot be reused
             $updateSql = "UPDATE accounts SET password = ?, cCode = NULL WHERE username = ?";
             if ($updateStmt = $conn->prepare($updateSql)) {
-                $updateStmt->bind_param("ss", $sha512Hash, $user);
+                $updateStmt->bind_param("ss", $secure_bcrypt_hash, $user);
                 
                 if ($updateStmt->execute()) {
-                    echo "<p style='color: green;'>Password successfully updated for " . htmlspecialchars($user) . "!</p>";
+                    $message_html = "<p style='color: green;'>Password successfully updated for " . htmlspecialchars($user) . "!</p>";
                 } else {
-                    echo "<p style='color: red;'>Error: System write error during password generation sequence.</p>";
+                    $message_html = "<p style='color: red;'>Error: System write error during password generation sequence.</p>";
                 }
                 $updateStmt->close();
             } else {
-                echo "<p style='color: red;'>Error: Encryption subsystem error.</p>";
+                $message_html = "<p style='color: red;'>Error: Encryption subsystem error.</p>";
             }
         } else {
-            echo "<p style='color: red;'>Error: Invalid username or authorization code (cCode).</p>";
+            // 🔒 USER ENUMERATION PROTECTION: Uniform fallback alert blocks username profiling vectors
+            $message_html = "<p style='color: red;'>Error: Invalid credentials matrix combination parameters specified.</p>";
         }
     } else {
-        echo "<p style='color: red;'>Please fill out all fields.</p>";
+        $message_html = "<p style='color: red;'>Please fill out all fields.</p>";
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -198,4 +213,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 </body>
 </html>
-
