@@ -36,9 +36,31 @@ if (file_exists($status_file)) {
     $maintenance_active = (trim(file_get_contents($status_file)) === '1');
 }
 
-// Replace this with your actual public IP address so you aren't locked out
-$allowed_ips = array('ADMIN IP ADDRESS'); 
-$is_admin = in_array($_SERVER['REMOTE_ADDR'], $allowed_ips);
+// --- SECURE SESSION-BASED MAINTENANCE CHECK ---
+//  SECURITY FIX: Replaced the broken REMOTE_ADDR IP array check with an adaptive session privilege gate.
+// This allows you to preview the live site during maintenance regardless of proxy IP changes.
+$is_admin = false;
+
+// Pull the user tracking handle from active browser memory safely
+$check_handle = $_SESSION['login_user'] ?? $login_session ?? '';
+
+if (!empty($check_handle)) {
+    // Cross-check the database to verify if this active user has Level 9 Administrative rights (dh = 1)
+    //  REFACTOR FIX: Using a secure prepared statement to insulate the database query loop
+    $gate_sql = "SELECT dh FROM accounts WHERE username = ? LIMIT 1";
+    if ($stmt_gate = $db->prepare($gate_sql)) {
+        $stmt_gate->bind_param("s", $check_handle);
+        $stmt_gate->execute();
+        $res_gate = $stmt_gate->get_result();
+        
+        if ($res_gate && $row_gate = $res_gate->fetch_assoc()) {
+            if ((int)$row_gate['dh'] === 1) {
+                $is_admin = true; // Admin status securely validated via session architecture!
+            }
+        }
+        $stmt_gate->close();
+    }
+}
 
 if ($maintenance_active && !$is_admin) {
     http_response_code(503);
