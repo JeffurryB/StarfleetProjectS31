@@ -1,5 +1,9 @@
 <?php
-    include('session.php');
+// 1. SYSTEM LOGICAL MATRIX INITIALIZATION
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+include_once('session.php'); // 🔒 include_once completely prevents function redeclaration crashes
 
 // Safely define the variable from session or fallback to prevent undefined variable warnings
 $login_session = $login_session ?? '';
@@ -11,36 +15,69 @@ if (empty($login_session)) {
 }
 
 if (!isset($db)) {
-    include("config.php"); 
+    include_once("config.php"); 
 }
-// Clean the session variable to protect against SQL injections
-$auth_username = mysqli_real_escape_string($db, $login_session);
 
-// Query database to check for System Admin clearance level (ID 1 or 2)
-$sql_admin_check = "SELECT id FROM accounts WHERE username = '$auth_username' LIMIT 1";
-$res_admin_check = mysqli_query($db, $sql_admin_check);
+// Ensure file queries link seamlessly with your config's database variable
+if (isset($db) && !isset($conn)) {
+    $conn = $db;
+}
 
-if ($res_admin_check && mysqli_num_rows($res_admin_check) == 1) {
-    $user_data = mysqli_fetch_assoc($res_admin_check);
-    $user_id = (int)$user_data['id'];
-    
-    // Strict enforcement: Only allow account IDs 1 and 2 access to the engineering switches
-    if ($user_id !== 1 && $user_id !== 2) {
-        header("Location: notauthorized.php?error=clearance_insufficient");
+// 🔒 CSRF INITIALIZATION MATRIX: Seed authorization verification parameters
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+$user_auth_handle = $login_session;
+
+// 2. QUERY SYSTEM ADMIN CLEARANCE LEVEL (🛡️ SECURE PREPARED STATEMENT REFACTOR)
+$sql_admin_check = "SELECT id FROM accounts WHERE username = ? LIMIT 1";
+
+if ($stmt_admin = $conn->prepare($sql_admin_check)) {
+    $stmt_admin->bind_param("s", $user_auth_handle);
+    $stmt_admin->execute();
+    $res_admin_check = $stmt_admin->get_result();
+
+    if ($res_admin_check && $res_admin_check->num_rows == 1) {
+        $user_data = $res_admin_check->fetch_assoc();
+        $user_id = (int)$user_data['id'];
+        
+        // Strict enforcement: Only allow account IDs 1 and 2 access to the engineering switches
+        if ($user_id !== 1 && $user_id !== 2) {
+            $stmt_admin->close();
+            header("Location: notauthorized.php?error=clearance_insufficient");
+            exit();
+        }
+    } else {
+        $stmt_admin->close();
+        header("Location: index.php");
         exit();
     }
+    $stmt_admin->close();
 } else {
-    // If user record disappears from the mapping array completely
-    header("Location: index.php");
-    exit();
+    die("CRITICAL CORES OFFLINE: RE-COMPILATION SYSTEM HANDSHAKE TIMED OUT.");
 }
-// 1. DATA CORE CONTROL LOGIC
+
+// 3. DATA CORE CONTROL LOGIC (WITH INTEGRATED CSRF FIREWALL SHIELD)
 $status_file = __DIR__ . '/maintenance_status.txt';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_maintenance'])) {
+    
+    // 🔒 CSRF DEFENSE ARRAY MATRIX: Drop cross-site unauthenticated toggle requests instantly
+    if (!isset($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
+        header("HTTP/1.1 403 Forbidden");
+        die("CRITICAL SECURITY ERROR: CSRF MATRIX MALFUNCTION. STATE MUTATION REFUSED.");
+    }
+
     $current_status = file_exists($status_file) ? trim(file_get_contents($status_file)) : '0';
     $new_status = ($current_status === '1') ? '0' : '1';
-    file_put_contents($status_file, $new_status);
+    
+    if (file_put_contents($status_file, $new_status) !== false) {
+        // Fire security tracking log metrics
+        $log_summary = "Toggled master system maintenance mode. New state configuration value assigned: [".$new_status."].";
+        record_security_log($conn, $user_auth_handle, 'UPDATE', 'SYSTEM_MAINTENANCE', 'MAINTENANCE_TOGGLE', $log_summary);
+    }
+
     header("Location: " . $_SERVER['PHP_SELF']);
     exit();
 }
@@ -49,6 +86,9 @@ $maintenance_is_on = false;
 if (file_exists($status_file)) {
     $maintenance_is_on = (trim(file_get_contents($status_file)) === '1');
 }
+
+// 🔒 Load user interface frame view layout safely now that authorization validation matches parameters
+include_once("maintenance_panel_view.php");
 ?>
 <!DOCTYPE html>
 <html lang="en">
