@@ -10,7 +10,7 @@ $DivResult = mysqli_query($db, $DivHeadersQuery);
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LCARS Civilian Manifest</title>
+    <title><?php echo GROUP_ABBR; ?> Civilian Manifest</title>
     <style>
         :root {
             --lcars-purple: #9966cc;
