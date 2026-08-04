@@ -2,7 +2,6 @@
 -- version 4.9.0.1
 -- https://www.phpmyadmin.net/
 --
--- Host: sql213.infinityfree.com
 -- Generation Time: Jul 21, 2026 at 05:03 AM
 -- Server version: 11.4.12-MariaDB
 -- PHP Version: 7.2.22
@@ -384,14 +383,17 @@ CREATE TABLE `Time Clock` (
 -- --------------------------------------------------------
 
 --
--- Table structure for table `titler_urls`
+-- Table structure for table `starships`
 --
 
-CREATE TABLE `titler_urls` (
-  `uuid` varchar(36) NOT NULL,
-  `url` text NOT NULL,
-  `last_seen` timestamp NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+CREATE TABLE IF NOT EXISTS starships (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ship_name VARCHAR(100) NOT NULL,
+    ncc_number VARCHAR(30) NOT NULL UNIQUE,
+    captain_name VARCHAR(100) DEFAULT 'UNASSIGNED',
+    status VARCHAR(50) DEFAULT 'Active Duty',
+    quadrant VARCHAR(50) DEFAULT 'Alpha'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
