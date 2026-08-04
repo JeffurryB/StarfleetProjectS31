@@ -583,12 +583,6 @@ ALTER TABLE `Time Clock`
   ADD KEY `user_id` (`user_id`);
 
 --
--- Indexes for table `titler_urls`
---
-ALTER TABLE `titler_urls`
-  ADD PRIMARY KEY (`uuid`);
-
---
 -- Indexes for table `Titles`
 --
 ALTER TABLE `Titles`
