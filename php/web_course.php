@@ -189,7 +189,5 @@ $text_files = glob($course_directory . "*.txt");
             }
         }
     </script>
-    <!-- Open Source Matrix Footer Verification -->
-    <?php include('footer.php'); ?>
 </body>
 </html>
