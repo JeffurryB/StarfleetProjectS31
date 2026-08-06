@@ -1,0 +1,84 @@
+/*
+    titler_ossl.lsl
+    Program is for pulling name tags from RP GROUP datadatbase
+    Copyright (C) 2016 - 2026 JEFFERY BIEDERMANN / The RP Group
+    Converted to OSSL compliance tracking matrix configurations.
+
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+*/
+
+// User configurable variables.
+string TAG_PAGE = "YOUR URL/tag.php";
+string HTTP_ERROR = "An unexpected error occured while attempting to lookup a title. Please visit https://github.com/JeffurryB/StarfleetProjectS31/issues to submit bug reports or checkup on known issues.\n\n";
+
+// Variable Init
+integer listenhandle;
+string version = "3.5.1-OSSL";
+
+// Process the raw server data return stream
+parseServerResponse(string body)
+{
+    // Set up if statement to handle server Errors here
+    if( llToLower( llGetSubString( body, 0, 5 ) ) == "error:" )
+    {
+        llOwnerSay( HTTP_ERROR + "\nRES: " + ( string )body );
+    }
+    else
+    {
+        list temp = llParseString2List( body, [":"], [] );
+        vector color = ( vector )llList2String( temp, 0 ) / 255; // Convert RGB stored values database side to Vectors for LSL
+        string tag = llList2String( temp, 1 );
+        llSetText( tag, color, 1.0 );
+    }
+}
+
+default
+{
+    state_entry()
+    {
+        listenhandle = llListen( 899, "", NULL_KEY, "" ); // adding a listener var to use later for closing
+        llOwnerSay( "INIT: OSSL Subspace Bridge starting" );
+        
+        // 🔒 OSSL DATA TRANSFER INTERCEPTOR
+        // Uses osPostURL to transmit parameters instantly past standard LSL throttle vectors
+        string post_data = "uuid=" + (string)llGetOwner();
+        
+        // Target endpoint configuration check
+        string body = osPostURL(TAG_PAGE, post_data);
+        
+        if(body != "")
+        {
+            parseServerResponse(body);
+        }
+        else
+        {
+            llOwnerSay(HTTP_ERROR + "\nRES: SYSTEM REJECTION // DATASTREAM TIMEOUT.");
+        }
+    }
+
+    listen( integer chan, string name, key id, string msg )
+    {
+        if( msg == "reset" )
+        {
+            llListenRemove( listenhandle ); // closing the listen before we reset the titler
+            llResetScript();
+        }
+        else if( msg == "list" )
+        {
+            // Broadcast owner name and version number
+            llRegionSay( 899, ( string )llGetDisplayName( llGetOwner() ) + " is using version " + version );
+        }
+    }
+
+    changed( integer change )
+    {
+        if( change & CHANGED_OWNER )
+        {
+            llListenRemove( listenhandle );
+            llResetScript();
+        }
+    }
+}
