@@ -1,5 +1,6 @@
 <?php
 include('session.php');
+include('config.php');
 
 // Assumes session.php provides $login_session and $db.
 // Query the database to see if the current user is an administrator
@@ -33,7 +34,7 @@ if ($res_mail) {
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>RP GROUP - Main Terminal</title>
+    <title><?php echo GROUP_ABBR; ?> - Main Terminal</title>
     <style>
         /* LCARS Color Palette */
         :root {
@@ -236,7 +237,7 @@ if ($res_mail) {
     <!-- Top Decorative Line Block -->
     <header class="lcars-header">
         <div class="lcars-bar-top"></div>
-        <h2 class="lcars-title">STARFLEET ACADEMY TERMINAL</h2>
+        <h2 class="lcars-title"><?php echo GROUP_ABBR; ?> ACADEMY TERMINAL</h2>
     </header>
 
     <div class="lcars-container">
@@ -316,6 +317,23 @@ if ($res_mail) {
         <p>Access Academy Grades, only visibile to Staff.</p>
     </a>
 <?php endif; ?>
+
+                <!-- LEVEL 10 CLEARANCE CONSOLE: ONLY VISIBLE TO ADMINISTRATORS -->
+    <?php if (isset($is_admin) && $is_admin === true): ?>
+    <a href="academy_scores.php" class="grid-card card-alt">
+        <h3>ACADEMY SCORES</h3>
+        <p>For Reviewing all Questions and answers, only visibile to Staff.</p>
+    </a>
+<?php endif; ?>
+
+                <!-- LEVEL 10 CLEARANCE CONSOLE: ONLY VISIBLE TO ADMINISTRATORS -->
+    <?php if (isset($is_admin) && $is_admin === true): ?>
+    <a href="teach_term.php" class="grid-card card-alt">
+        <h3>TEACHER TERMINAL</h3>
+        <p>Let's teachers manually add classes take in SL or OS, only visibile to Staff.</p>
+    </a>
+<?php endif; ?>
+
 
             </div>
         </main>
