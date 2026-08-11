@@ -376,8 +376,8 @@ CREATE TABLE `SJ_info` (
 CREATE TABLE `Time Clock` (
   `id` int(10) UNSIGNED NOT NULL,
   `user_id` int(10) UNSIGNED NOT NULL COMMENT 'User ID from accounts table',
-  `time_in` int(10) UNSIGNED NOT NULL,
-  `time_out` int(10) UNSIGNED DEFAULT NULL
+  `time_in` int(10) DATETIME NOT NULL,
+  `time_out` int(10) DATETIME DEFAULT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci COMMENT='Cross refrences clock times with AV UUIDs';
 
 -- --------------------------------------------------------
