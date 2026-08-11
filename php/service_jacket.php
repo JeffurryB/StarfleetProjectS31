@@ -225,7 +225,7 @@ $profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfileP
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>LCARS - Service Jacket</title>
+    <title> <?php echo GROUP_ABBR; ?> - Service Jacket</title>
     <style>
     body { background: #000; color: #f90; font-family: 'Antonio', sans-serif; letter-spacing: .05em; margin: 20px; text-transform: uppercase; }
     .lcars-container { display: flex; max-width: 950px; margin: 0 auto; }
@@ -385,10 +385,14 @@ $profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfileP
 </div>
 
 <!-- Modal Overlay Dialog Interface Container -->
+<!-- Modal Overlay Dialog Interface Container -->
 <div id="bioModal" class="lcars-modal" style="display: none !important;">
     <div class="modal-content">
         <div class="modal-header">Update Personnel Bio</div>
         <form method="POST">
+            <!-- CSRF Token Core Synchronization Field -->
+            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+            
             <input type="hidden" name="action" value="update_bio">
             <textarea name="bio_text" class="lcars-textarea" placeholder="Input biography log entries here..."><?php echo htmlspecialchars($user['bio'] ?? ''); ?></textarea>
             <div class="modal-buttons">
@@ -400,12 +404,16 @@ $profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfileP
 </div>
 
 <!-- Specialized Profile Image Matrix Upload Modal -->
+<!-- Specialized Profile Image Matrix Upload Modal -->
 <div id="photoModal" class="lcars-modal" style="display: none !important;">
     <div class="modal-content" style="border-color: var(--lcars-orange, #ff9900);">
         <div class="modal-header" style="color: var(--lcars-orange, #ff9900);">Update Profile Image</div>
         
         <!-- Standard upload sub-stream form -->
         <form method="POST" enctype="multipart/form-data" id="photoUploadForm">
+            <!-- CSRF Token Core Synchronization Field -->
+            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+            
             <input type="hidden" name="action" value="upload_photo">
             
             <div class="form-row" style="margin: 20px 0; text-align: left; display: flex; flex-direction: column; gap: 8px;">
@@ -422,13 +430,14 @@ $profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfileP
                 <button type="submit" class="lcars-action-btn" style="background-color:#00ff00;">Synchronize</button>
             </div>
         </form>
-
-        <!-- Hidden secondary structural execution engine channel for resetting back to base graphic strings -->
-        <form method="POST" id="photoResetForm" style="display: none;">
-            <input type="hidden" name="action" value="reset_photo">
-        </form>
     </div>
 </div>
+
+<!-- NOTE: If you have a separate invisible reset form for restoring defaults anywhere in your file, ensure it looks like this: -->
+<form method="POST" id="photoResetForm" style="display:none;">
+    <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token']; ?>">
+    <input type="hidden" name="action" value="reset_photo">
+</form>
 
 <!-- Active JavaScript Controller Triggers -->
 <script>
@@ -445,6 +454,7 @@ $profile_pic = (!empty($user['profile_img'])) ? $user['profile_img'] : 'ProfileP
         document.getElementById('photoModal').style.setProperty('display', 'none', 'important');
     }
 </script>
-
+<!-- Open Source Matrix Footer Verification -->
+    <?php include('footer.php'); ?>
 </body>
 </html>
