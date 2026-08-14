@@ -1,4 +1,8 @@
 <?php
+header("X-Frame-Options: DENY");
+header("X-Content-Type-Options: nosniff");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';");
+
 $DB_SERVER = "YOUR SERVER NAME";
 $DB_USERNAME = "DB USERNAME";
 $DB_PASSWORD = "DB PASSWORD";
