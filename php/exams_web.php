@@ -269,7 +269,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['submit_exam']) && !$ac
                                     $upper_letter = strtoupper($letter);
                                     $req_attr = ($letter === 'a') ? 'required' : '';
                                     echo '<label class="option-label">';
-                                    echo '<input type="radio" name="answers[' . $q_num . ']" value="' . $upper_letter . '" ' . $req_attr . '>';
+                                   echo '<input type="radio" name="answers[' . (int)$q_num . ']" value="' . htmlspecialchars((string)$upper_letter, ENT_QUOTES, 'UTF-8') . '" ' . $req_attr . '>';
                                     echo '<strong>' . $upper_letter . ':</strong> ' . htmlspecialchars($row[$letter]);
                                     echo '</label>';
                                 }
