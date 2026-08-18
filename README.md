@@ -30,3 +30,5 @@ The architecture of this platform is entirely modular, making it a powerful util
 - Cross-Platform Adaptability: Deploys easily on standard shared hosting profiles like InfinityFree.
 
   **If you would like to view our demo site, please check our wiki for login info: https://github.com/JeffurryB/StarfleetProjectS31/wiki/Demo-Site**
+
+  ## Download the Website Now! https://demo-rpgroup.infinityfree.me/download.php
