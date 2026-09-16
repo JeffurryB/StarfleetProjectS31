@@ -13,3 +13,9 @@ map_admin.php
 map_data.php
 tactical_map.php
 ```
+
+```
+Comm.php
+fetch_messages.php
+send_message.php
+purge_chat.php
